@@ -18,15 +18,11 @@ This skill makes **content decisions**. It does NOT touch Pandoc or PPTX formatt
 
 ---
 
-## When To Use
+## How To Invoke
 
-Trigger this skill when prompts include phrases like:
-- "design slides"
-- "design a storyboard"
-- "make a slide storyboard"
-- "turn these notes into slides"
-- "build the presentation outline"
-- "storyboard this report"
+```
+/5-ppt-design <path-to-notes-or-draft>
+```
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: research-task-conductor
-description: "End-to-end research task conductor: reads a rough instruction document (default readme.md in the current directory), plans the implementation, executes it, and reorganises the instruction into a clear sectioned research note with date stamp. Triggered by: 'conduct task from readme', 'plan and execute from instructions', 'run task from [file]'."
+description: "End-to-end research task conductor: reads a rough instruction document (default readme.md in the current directory), plans the implementation, executes it, and reorganises the instruction into a clear sectioned research note with date stamp. Invoke directly: /3-conduct-plan <path-to-readme.md>."
 license: MIT
 ---
 
@@ -23,14 +23,11 @@ project — this skill operates on a **single task directory**.
 
 **Typical workflow:** Run after skill-1 (plan-task) has produced an enriched readme.md. If the readme contains `## enrichment notes`, Phase 0 will be fast — it reuses those findings instead of re-exploring.
 
-## When To Use
+## How To Invoke
 
-Trigger this skill when prompts include phrases like:
-- "conduct task from readme"
-- "plan and execute from instructions"
-- "run task from [file]"
-- "implement the task described in readme.md"
-- "conduct research task"
+```
+/3-conduct-plan <path-to-readme.md>
+```
 
 ## Parameters
 

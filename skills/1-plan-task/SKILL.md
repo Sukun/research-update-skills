@@ -28,12 +28,11 @@ if user accepts the plan, save it to the same file.
 **Typical workflow:** skill-1 (plan) → optionally skill-2 (review) → skill-3 (conduct). Skill-3 will detect the enrichment notes this skill produces and skip redundant data exploration.
 
 
-## When To Use
+## How To Invoke
 
-Trigger this skill when prompts include phrases like:
-- "plan task from readme"
-- "make a plan"
-- "plan a task"
+```
+/1-plan-task <work_dir>
+```
 
 ---
 

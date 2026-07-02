@@ -1,6 +1,6 @@
 ---
 name: noteit
-description: "Log research insights and work-progress records into two persistent files: a per-project notes file (./docs/<PROJECT_NAME>_notes.md) for detailed reasoning, and a global quick-notes file (~/docs/quick_notes.md) for short Obsidian-compatible progress entries. New entries are prepended (most recent first). Trigger with 'log note', 'log this', 'save this insight', 'note that [...]', or 'add to research log'."
+description: "Log research insights and work-progress records into two persistent files: a per-project notes file (./docs/<PROJECT_NAME>_notes.md) for detailed reasoning, and a global quick-notes file (~/docs/quick_notes.md) for short Obsidian-compatible progress entries. New entries are prepended (most recent first). Invoke directly: /noteit <what to remember>."
 license: MIT
 ---
 
@@ -12,15 +12,14 @@ Preserve the *why* and *what-it-means* from plan-mode reasoning and Q&A threads 
 
 **Key principle: distil, don't transcribe. Capture the settled conclusion and the logical path to it, not the exploration steps.**
 
-## When To Use
+## How To Invoke
 
-Trigger this skill when the user says any of:
-- `log note`
-- `log this`
-- `save this insight`
-- `add to research log`
-- `note that [...]`
-- At the end of a plan-mode investigation, if the user asks to preserve the reasoning
+```
+/noteit <what to remember>
+```
+
+Also worth invoking right after finishing an implementation or bug fix, to capture the
+detail that would otherwise be forgotten by next week — see "What To Log" below.
 
 ## What To Log
 
@@ -42,7 +41,7 @@ Trigger this skill when the user says any of:
 
 ## Output Files
 
-Two files are written on every `log note` trigger.
+Two files are written every time this skill runs.
 
 ### File 1 — Project Notes (detailed)
 
@@ -112,11 +111,11 @@ Where this came from: "plan mode analysis of [topic]", "Q&A — [date]", "from r
 
 ---
 
-## Behaviour by Trigger
+## Behaviour by Invocation Context
 
-### Writing procedure (applies to all triggers)
+### Writing procedure (applies every time)
 
-For every `log note` trigger, write to **both files** in this order:
+Every time this skill is invoked, write to **both files** in this order:
 
 **Step A — Project Notes file (`./docs/<PROJECT_NAME>_notes.md`)**
 1. If the file does not exist: create `./docs/` if needed, create the file with header `# Research Notes — <PROJECT_NAME>`, then write the detailed entry immediately below.
@@ -129,14 +128,14 @@ For every `log note` trigger, write to **both files** in this order:
 
 After writing, report both file paths. Do not ask for confirmation unless the topic is ambiguous.
 
-### `log note` / `log this` / `note that [...]`
-Triggered mid-conversation after a Q&A exchange.
+### Mid-conversation invocation
+Invoked right after a Q&A exchange, while the reasoning is still fresh.
 
 1. Infer the topic from the most recent exchange. If the topic is unambiguous, **write immediately without asking for confirmation** — report both file paths after writing.
 2. If the topic is ambiguous (multiple threads active), ask: *"Which topic should I log — [A] or [B]?"* — one short question, then write.
 
 ### Plan-mode extraction
-Triggered when the user asks to preserve reasoning from a plan-mode investigation.
+Invoked when the user asks to preserve reasoning from a plan-mode investigation.
 
 1. Extract the key conceptual findings from the plan reasoning — skip the step-by-step task decomposition.
 2. Write directly without asking for confirmation.

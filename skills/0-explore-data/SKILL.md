@@ -12,22 +12,11 @@ Build a working understanding of a project and its data. This is step zero of th
 
 **Key principle: read existing knowledge first, scan raw data only to fill gaps.** Most projects accumulate documentation, previous reports, and output summaries over time. Re-scanning raw data files from scratch is slow and wasteful when this knowledge already exists.
 
-## When To Use
+## How To Invoke
 
-Trigger this skill when prompts include phrases like:
-- "explore this data"
-- "explore this project"
-- "what data do I have"
-- "EDA"
-- "look at this dataset"
-- "summarise the data"
-- "data overview"
-- "what's in this directory"
-- "initial data check"
-- "inspect the files"
-- "help me understand this data"
-- "get familiar with this project"
-- "onboard me to this codebase"
+```
+/0-explore-data <path-to-project-or-data-dir>
+```
 
 ## Parameters
 

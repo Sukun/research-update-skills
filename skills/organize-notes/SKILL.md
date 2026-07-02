@@ -17,16 +17,11 @@ Maintain a **modular, living documentation system** for a research project:
 
 ---
 
-## When To Use
+## How To Invoke
 
-Trigger when prompts include:
-- "organize research notes"
-- "update RESEARCH_NOTES"
-- "compile research progress"
-- "add [topic] to the notes"
-- "notes are out of date"
-- "create research memo"
-- "maintain research documentation"
+```
+/organize-notes <target_directory>
+```
 
 ---
 

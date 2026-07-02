@@ -22,11 +22,11 @@ Four-phase workflow:
 
 ---
 
-## When To Use
+## How To Invoke
 
-Trigger when prompts include:
-- "create ppt"
-- "export to pptx"
+```
+/6-ppt-create <path-to-storyboard.md>
+```
 
 ---
 

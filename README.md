@@ -37,9 +37,9 @@ Five recurring moments in a research week, each mapped to a skill:
 4. You have results → turn them into a short progress report.
 5. You need to present → turn the report/notes into a slide storyboard, then a deck.
 
-Two more run in the background the whole time: `noteit` catches an insight the moment
-you have it, and `polish-plots` makes sure figures look presentable without you
-hand-tuning `rcParams` every time.
+Two more run in the background the whole time: `noteit` catches an insight or a
+bug-fix detail the moment you have it, and `polish-plots` makes sure figures look
+presentable without you hand-tuning `rcParams` every time.
 
 ## What it does not do
 
@@ -58,40 +58,71 @@ hand-tuning `rcParams` every time.
 always on, any time:  organize-notes · noteit · polish-plots
 ```
 
-1. **Explore** the data before you plan against it.
-2. **Plan** the task — a structured questionnaire produces a plan doc, then a critical
-   pass enriches it with concrete file paths, data formats, and risks.
-3. **Review** the plan (optional) — worth it before anything paper-submission-level or
-   compute-expensive; skip it for a routine exploratory pass.
-4. **Conduct** the plan — drives a rough `readme.md` through implement → document. This
-   is an *execution assistant*, not an autonomous research agent: it runs the plan
-   *you* already reviewed, writes the code, and documents the outcome — it doesn't
-   decide what the plan should be or what the results mean.
-5. **Write it up** as a report, and/or **design and create slides** for the next
-   check-in.
+1. **Explore** the data with `0-explore-data` before you plan against it — it reads
+   existing docs first, then scans raw data, and produces an `EDA_REPORT.md` **plus a
+   set of quick-look plots** (time series, spatial snapshot, histogram, coverage map),
+   not just a text summary.
+2. **Plan** the task with `1-plan-task`. This runs inside Claude Code's built-in Plan
+   Mode, but produces something Plan Mode alone doesn't: a structured plan **file** on
+   disk (`doc/*.md`) with a fixed schema — purpose, data sources, methodology, risks —
+   that outlives the current session. A Plan Mode approval is a one-time,
+   in-conversation gate; this plan document is a persistent artifact that
+   `2-review-plan` audits later and `3-conduct-plan` executes from, possibly in a
+   completely different session.
+3. **Review** the plan (optional) with `2-review-plan` — a separate pass, run after the
+   fact, that reads the plan file **and** your existing code, notes, and prior results
+   (`REFERENCE_DIR`) as a cross-check: are the metrics valid, is the baseline fair, does
+   this actually match what's already in the repo? That's the double-check
+   `1-plan-task` alone can't do — it doesn't have your prior work in front of it while
+   drafting. Worth it before anything paper-submission-level or compute-expensive; skip
+   it for a routine exploratory pass.
+4. **Conduct** the plan with `3-conduct-plan` — this is the skill that actually writes
+   Python code and runs the experiment, then reorganizes the rough instructions into a
+   clean, dated research note. It's an *execution assistant*, not an autonomous
+   research agent: it runs the plan *you* already reviewed — it doesn't decide what
+   the plan should be or what the results mean.
+5. **Report** with `4-report` — once the experiment has run, this gathers the
+   resulting notes and figures into one document, instead of you opening and writing
+   up each output figure by hand. And/or **design and create slides**
+   (`5-ppt-design` → `6-ppt-create`) for the next check-in.
 
-Throughout: `organize-notes` keeps a living notes index, `noteit` logs quick insights as
-you have them, and `polish-plots` keeps matplotlib output consistent.
+Throughout: `organize-notes` keeps a living notes index; `noteit` is for the
+lightweight catch — right after finishing an implementation, a modification, or a bug
+fix, log the detail that's worth remembering before it's forgotten; and `polish-plots`
+applies your preferred matplotlib style, used both *before* the numerical experiment
+(so figures come out styled from the start) and again *before* `4-report` (to clean up
+anything that still needs it).
 
 ## Skills at a glance
 
-| Skill | When to use it | Trigger phrase (example) | Output |
-|---|---|---|---|
-| `0-explore-data` | Starting a new dataset or project, before you plan against it | "explore this data" | EDA report + quick-look plots |
-| `1-plan-task` | Starting a new experiment or task | "make a plan" | Structured plan doc in `docs/` |
-| `2-review-plan` | Before running something costly | "review my plan" | Verdict (ACCEPT / CONDITIONALLY_ACCEPT / REJECT) + fix list |
-| `3-conduct-plan` | Executing an already-reviewed plan end to end *(execution assistant — see note above)* | "conduct task from readme" | Scripts + outputs + a clean, sectioned research note |
-| `4-report` | Before a check-in with your advisor or collaborators | "write a tech report" | `TECH_REPORT_DRAFT.md` or `PAPER_DRAFT.md` |
-| `5-ppt-design` | Before a group meeting or talk — deciding the story | "design slides" | `<topic>_<dd-mm-yyyy>.md` storyboard |
-| `6-ppt-create` | Once the storyboard is approved — mechanical export only | "export to pptx" | `.pptx`, rendered via Pandoc |
-| `organize-notes` | After a work session, before you forget the details | "organize research notes" | `RESEARCH_NOTES.md` index + `notes/<topic>.md` |
-| `noteit` | The moment you realize something worth remembering | "save this insight" | Dated, appended research-log entry |
-| `polish-plots` | Before figures go into a report or slide | "polish plots" | Matplotlib script refactored onto a shared style |
+Each skill is a function: an explicit invocation, a defined input, a defined output.
+No skill guesses which one you meant from a vague phrase — you call it directly.
+
+| Skill | When to use it | Invoke | Input | Output |
+|---|---|---|---|---|
+| `0-explore-data` | Starting a new dataset or project, before you plan against it | `/0-explore-data <path-to-project-or-data-dir>` | A data/project directory | `EDA_REPORT.md` + `eda_plots/` (quick-look plots) |
+| `1-plan-task` | Starting a new experiment or task | `/1-plan-task <work_dir>` | A rough task description (conversation context) | Structured plan doc at `<work_dir>/doc/*.md` |
+| `2-review-plan` | Before running something costly — cross-checks the plan against local docs/prior results | `/2-review-plan <path-to-plan.md>` | A plan file + a reference directory of existing code/notes | Verdict (ACCEPT / CONDITIONALLY_ACCEPT / REJECT) + fix list |
+| `3-conduct-plan` | Executing an already-reviewed plan end to end *(execution assistant — see note above)* | `/3-conduct-plan <path-to-readme.md>` | A reviewed instruction document | Written + run scripts, generated outputs, a clean sectioned research note |
+| `4-report` | After the experiment runs — gathers outputs into one document instead of writing up each figure by hand | `/4-report <notes_dir>` | A directory of research notes and figures | `TECH_REPORT_DRAFT.md` or `PAPER_DRAFT.md` |
+| `5-ppt-design` | Before a group meeting or talk — deciding the story | `/5-ppt-design <path-to-notes-or-draft>` | Research notes or a rough draft | `<topic>_<dd-mm-yyyy>.md` storyboard |
+| `6-ppt-create` | Once the storyboard is approved — mechanical export only | `/6-ppt-create <path-to-storyboard.md>` | An approved storyboard file | `.pptx`, rendered via Pandoc |
+| `organize-notes` | After a work session, before you forget the details | `/organize-notes <target_directory>` | A project directory with scattered notes/figures | `RESEARCH_NOTES.md` index + `notes/<topic>.md` |
+| `noteit` | Right after finishing an implementation or a fix — capture the detail before it's gone | `/noteit <what to remember>` | An insight, conclusion, or bug-fix detail | Dated entries appended to `docs/<PROJECT>_notes.md` + `~/docs/quick_notes.md` |
+| `polish-plots` | Before the numerical experiment (styled from the start) and again before `4-report` | `/polish-plots <path-to-script.py>` | A Python matplotlib script | The same script refactored onto the shared style templates |
 
 ## Install
 
 These are [Claude Code skills](https://docs.claude.com/en/docs/claude-code) — plain
 folders with a `SKILL.md` that the agent reads and invokes by name.
+
+**Prerequisites:**
+- [Pandoc](https://pandoc.org/installing.html) — **required for `6-ppt-create`**
+  (`brew install pandoc`, `apt install pandoc`, or see the link for other platforms).
+- `pip install python-pptx pillow` — also required for `6-ppt-create`.
+- Python + `matplotlib` — required for `polish-plots` (`cartopy` optional, map plots
+  only).
+- Everything else needs nothing beyond Claude Code itself.
 
 ```bash
 git clone https://github.com/<you>/research-update-skills.git
@@ -104,16 +135,18 @@ Or symlink instead of copying if you want to track updates:
 ln -s "$(pwd)/research-update-skills/skills/"* ~/.claude/skills/
 ```
 
-Invoke a skill by name, e.g. `/1-plan-task`, or just describe what you want ("plan this
-task", "polish these plots") — Claude Code matches on the trigger phrases in each
-`SKILL.md`. If you're using a different skill-folder convention (e.g. a Copilot-style
-skills directory), the same folders should drop in unchanged — each is self-contained.
+**Invoke a skill explicitly, with a target**, e.g.:
 
-**Requirements** (only for the skills that need them):
-- `polish-plots` — Python + `matplotlib`; `cartopy` optional, only for map plots.
-- `6-ppt-create` — [Pandoc](https://pandoc.org/) on `PATH`, plus `python-pptx` and
-  `Pillow` (`pip install python-pptx pillow`).
-- Everything else needs nothing beyond Claude Code itself.
+```
+/0-explore-data data/stations/
+/4-report notes/
+```
+
+This repo intentionally does not rely on natural-language trigger-phrase matching —
+every `SKILL.md` here documents a `/skill-name <target>` invocation instead, so you get
+the exact skill you meant, not a best guess at which vague phrase you meant. If you're
+using a different skill-folder convention (e.g. a Copilot-style skills directory), the
+same folders should drop in unchanged — each is self-contained.
 
 ## 5-minute demo
 
@@ -122,21 +155,6 @@ loop on a small, synthetic scenario: a rough one-paragraph experiment log goes i
 plan, research notes, and a slide storyboard come out — the same shape as a real week's
 worth of "get this ready to show my advisor." Start there — reading it end to end takes
 about five minutes.
-
-## Design principles
-
-- **Small over comprehensive.** Ten skills, one job each. No shared runtime, no plugin
-  system, no config file.
-- **Demo-first.** If you can't see it working in five minutes, it's not documented well
-  enough yet.
-- **Human-in-the-loop.** Every skill proposes; you approve. Plans get reviewed before
-  execution, reports get read before they're sent.
-- **File-based.** Everything a skill produces is a markdown file, a script, or a
-  standard file format (`.pptx`, `.png`) — versioned with git, nothing locked into this
-  repo.
-- **Built from real use.** Every skill here has been used weekly on real analysis work,
-  not written once and left untested.
-- **No lock-in.** Stop using any single skill without breaking the others.
 
 ## Non-goals
 

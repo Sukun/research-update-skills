@@ -5,9 +5,9 @@ small, focused PRs are welcome.
 
 ## Reporting issues
 
-If a skill's trigger phrases don't match how you'd naturally ask for it, or a `SKILL.md`
-assumes something about your setup that doesn't hold, open an issue. Include which skill,
-what you expected, and what happened instead.
+If a skill's `SKILL.md` assumes something about your setup that doesn't hold, or the
+`/skill-name <target>` invocation doesn't produce what the file promises, open an issue.
+Include which skill, what you expected, and what happened instead.
 
 ## Proposing changes
 
@@ -27,6 +27,6 @@ Skills are just a folder with a `SKILL.md` that Claude Code reads. To try a chan
 cp -r skills/<skill-name> ~/.claude/skills/<skill-name>
 ```
 
-Then invoke it in a real (or throwaway) working directory and check the output matches
-what the `SKILL.md` promises. There's no separate test suite — the skill's own output is
-the test.
+Then invoke it explicitly (e.g. `/skill-name <target>`) in a real (or throwaway) working
+directory and check the output matches what the `SKILL.md` promises. There's no separate
+test suite — the skill's own output is the test.

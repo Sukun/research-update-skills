@@ -23,17 +23,11 @@ Checks:
 | **Mode** | Plan mode (default) | This skill is read-only audit. Plan mode prevents accidental edits. |
 | **Model** | Sonnet (default) | Structured checklist evaluation. Opus not required. |
 
-## When To Use
-Trigger this skill when prompts include phrases like:
-- "review research plan"
-- "review my plan"
-- "methodology review"
-- "metric audit"
-- "is this plan executable"
-- "check my experimental design"
-- "finalize experimental design"
-- "audit my approach"
-- "critique this plan"
+## How To Invoke
+
+```
+/2-review-plan <path-to-plan.md>
+```
 
 ## When To Skip
 Skip this skill for routine tasks where the methodology is well-established:

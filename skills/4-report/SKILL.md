@@ -13,24 +13,14 @@ Transform research notes, experiment outputs, or validated results into a struct
 - **informal** (default): Internal tech report for domain experts. Filters out code/debug noise, translates implementation jargon to domain terms. Output: `TECH_REPORT_DRAFT.md`.
 - **formal**: Journal-paper-style manuscript with structured abstract, numbered figures/tables, cross-references, equations, and bibliography. Output: `PAPER_DRAFT.md`.
 
-## When To Use
+## How To Invoke
 
-Trigger this skill when prompts include phrases like:
-- "extract report from notes"
-- "write a tech report"
-- "turn notes into a report"
-- "summarize results as a report"
-- "draft technical report"
-- "clean up notes into a report"
-- "write up the results"
-- "write a paper"
-- "formal report"
-- "journal paper draft"
-- "write up for publication"
-- "paper draft from results"
-- "academic report"
-- "manuscript draft"
-- "prepare a paper"
+```
+/4-report <notes_dir>
+```
+
+Add `STYLE=formal` to produce a journal-style manuscript instead of the default
+informal tech report — see Parameters below.
 
 ## Parameters
 

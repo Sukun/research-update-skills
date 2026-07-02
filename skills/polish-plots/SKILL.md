@@ -1,6 +1,6 @@
 ---
 name: polish-plots
-description: "Apply the bundled shared-plotting style conventions to any Python matplotlib script. Replaces raw plt.rcParams blocks, plt.savefig(), and inline fontsize overrides with calls to the plot_templates helpers bundled in this skill. Trigger with: 'polish plots', 'polish this figure', 'apply shared style', 'fix plot style', or 'use shared_plotting'."
+description: "Apply the bundled shared-plotting style conventions to any Python matplotlib script. Replaces raw plt.rcParams blocks, plt.savefig(), and inline fontsize overrides with calls to the plot_templates helpers bundled in this skill. Invoke directly: /polish-plots <path-to-script>."
 license: MIT
 ---
 
@@ -19,18 +19,11 @@ at an external shared-plotting package; the install root is
 
 ---
 
-## Trigger Phrases
+## How To Invoke
 
-Invoke this skill when the user says any of:
-
-- `polish plots`
-- `polish this figure`
-- `polish the plot`
-- `apply shared style`
-- `fix plot style`
-- `use shared_plotting`
-- `apply shared_plotting`
-- `clean up the figure style`
+```
+/polish-plots <path-to-script.py>
+```
 
 ---
 
