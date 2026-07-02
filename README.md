@@ -1,24 +1,57 @@
-# research-flow-skills
+# research-update-skills
 
-*Small, opinionated Claude Code skills for everyday research.*
+**Turn messy numerical experiment work into advisor-ready updates.**
 
-A set of Claude Code skills I actually use, day to day, for AI-assisted computational
-research: turning a rough idea into a plan, running the analysis, keeping notes, writing
-it up, and putting together slides. This isn't a framework — it's my workflow, packaged
-so other researchers can borrow the pieces that are useful to them.
+A small set of Claude Code skills built from my own daily research workflow. Not a
+research-automation framework. Not a giant skill library. Just the handful of steps I
+actually use every week to turn scattered experiment progress — half-finished scripts,
+a folder of figures, a few Slack-message-length insights — into a clear plan, clean
+notes, a short report, and a slide deck I can put in front of an advisor or
+collaborator without an extra hour of formatting.
+
+If most of your "research overhead" is repetitive, mechanical, and eats time you'd
+rather spend on the actual science — writing up what you did, organizing notes so you
+can find them later, making figures presentable, building the same slide skeleton every
+week — that's exactly what these skills offload. The judgment stays yours; the grunt
+work doesn't have to.
 
 ## Who this is for
 
-Computational / quantitative researchers using [Claude Code](https://claude.com/claude-code)
-(or a similarly skill-aware coding agent) who want less friction between "I have a rough
-idea" and "I have a plan, some notes, and a report or slide deck to show for it."
+- Graduate students, postdocs, and early-career faculty
+- People who run numerical experiments, simulations, or data analysis as their main
+  research activity
+- Anyone who regularly has to explain "what did I actually do this week" to an advisor,
+  PI, or collaborator
 
-## What it solves
+## Who this is not for
 
-Research work has a recurring shape: understand the data, plan the task, do the work,
-write down what you learned, and eventually turn it into a report or a talk. These skills
-cover that shape end to end, plus two things that are easy to let slide — keeping notes
-as you go, and keeping plot style consistent across scripts.
+- People looking for a fully autonomous "AI does the research" system
+- People who need a large, all-purpose academic skill library (lectures, grant writing,
+  email triage, etc.)
+- People whose main workflow is meetings, email, and project management rather than
+  hands-on computational work
+
+## What it actually does
+
+Five recurring moments in a research week, each mapped to a skill:
+
+1. You have a vague idea → turn it into a concrete plan.
+2. You have scattered results and logs → turn them into organized notes.
+3. You're about to run something expensive → sanity-check the plan first.
+4. You have results → turn them into a short progress report.
+5. You need to present → turn the report/notes into a slide storyboard, then a deck.
+
+Two more run in the background the whole time: `noteit` catches an insight the moment
+you have it, and `polish-plots` makes sure figures look presentable without you
+hand-tuning `rcParams` every time.
+
+## What it does not do
+
+- It does not decide what your research question should be.
+- It does not draw scientific conclusions for you.
+- It does not run unattended experiments while you're away.
+- It does not replace your judgment — you approve every meaningful step (plans get
+  reviewed before execution, reports get read before they're sent).
 
 ## Workflow
 
@@ -30,30 +63,34 @@ always on, any time:  organize-notes · noteit · polish-plots
 ```
 
 1. **Explore** the data before you plan against it.
-2. **Plan** the task — a structured questionnaire produces a plan doc, then a critical pass
-   enriches it with concrete file paths, data formats, and risks.
-3. **Review** the plan (optional) — worth it for anything paper-submission-level or
-   compute-expensive; skip it for routine exploratory work.
-4. **Conduct** the plan — drives a rough `readme.md` through implement → document.
-5. **Write it up** as a report, and/or **design and create slides**.
+2. **Plan** the task — a structured questionnaire produces a plan doc, then a critical
+   pass enriches it with concrete file paths, data formats, and risks.
+3. **Review** the plan (optional) — worth it before anything paper-submission-level or
+   compute-expensive; skip it for a routine exploratory pass.
+4. **Conduct** the plan — drives a rough `readme.md` through implement → document. This
+   is an *execution assistant*, not an autonomous research agent: it runs the plan
+   *you* already reviewed, writes the code, and documents the outcome — it doesn't
+   decide what the plan should be or what the results mean.
+5. **Write it up** as a report, and/or **design and create slides** for the next
+   check-in.
 
 Throughout: `organize-notes` keeps a living notes index, `noteit` logs quick insights as
 you have them, and `polish-plots` keeps matplotlib output consistent.
 
-## Skills
+## Skills at a glance
 
-| Skill | Trigger phrase (example) | Output |
-|---|---|---|
-| `0-explore-data` | "explore this data" | EDA report + quick-look plots |
-| `1-plan-task` | "plan this research task" | plan doc in `docs/` |
-| `2-review-plan` | "review this plan" | verdict (ACCEPT / CONDITIONALLY_ACCEPT / REJECT) + fix list |
-| `3-conduct-plan` | "conduct task from readme" | scripts + outputs + a clean, sectioned research note |
-| `4-report` | "write the report" | `TECH_REPORT_DRAFT.md` or `PAPER_DRAFT.md` |
-| `5-ppt-design` | "design slides" | `<topic>_<dd-mm-yyyy>.md` storyboard |
-| `6-ppt-create` | "create the slides" | `.pptx`, rendered via Pandoc |
-| `organize-notes` | "organize notes" | `RESEARCH_NOTES.md` index + `notes/<topic>.md` |
-| `noteit` | "log this note" | dated research-log entry |
-| `polish-plots` | "polish plots" | matplotlib script refactored onto a shared style |
+| Skill | When to use it | Trigger phrase (example) | Output |
+|---|---|---|---|
+| `0-explore-data` | Starting a new dataset or project, before you plan against it | "explore this data" | EDA report + quick-look plots |
+| `1-plan-task` | Starting a new experiment or task | "make a plan" | Structured plan doc in `docs/` |
+| `2-review-plan` | Before running something costly | "review my plan" | Verdict (ACCEPT / CONDITIONALLY_ACCEPT / REJECT) + fix list |
+| `3-conduct-plan` | Executing an already-reviewed plan end to end *(execution assistant — see note above)* | "conduct task from readme" | Scripts + outputs + a clean, sectioned research note |
+| `4-report` | Before a check-in with your advisor or collaborators | "write a tech report" | `TECH_REPORT_DRAFT.md` or `PAPER_DRAFT.md` |
+| `5-ppt-design` | Before a group meeting or talk — deciding the story | "design slides" | `<topic>_<dd-mm-yyyy>.md` storyboard |
+| `6-ppt-create` | Once the storyboard is approved — mechanical export only | "export to pptx" | `.pptx`, rendered via Pandoc |
+| `organize-notes` | After a work session, before you forget the details | "organize research notes" | `RESEARCH_NOTES.md` index + `notes/<topic>.md` |
+| `noteit` | The moment you realize something worth remembering | "log this insight" | Dated, appended research-log entry |
+| `polish-plots` | Before figures go into a report or slide | "polish plots" | Matplotlib script refactored onto a shared style |
 
 ## Install
 
@@ -61,14 +98,14 @@ These are [Claude Code skills](https://docs.claude.com/en/docs/claude-code) — 
 folders with a `SKILL.md` that the agent reads and invokes by name.
 
 ```bash
-git clone https://github.com/<you>/research-flow-skills.git
-cp -r research-flow-skills/skills/* ~/.claude/skills/
+git clone https://github.com/<you>/research-update-skills.git
+cp -r research-update-skills/skills/* ~/.claude/skills/
 ```
 
 Or symlink instead of copying if you want to track updates:
 
 ```bash
-ln -s "$(pwd)/research-flow-skills/skills/"* ~/.claude/skills/
+ln -s "$(pwd)/research-update-skills/skills/"* ~/.claude/skills/
 ```
 
 Invoke a skill by name, e.g. `/1-plan-task`, or just describe what you want ("plan this
@@ -85,29 +122,36 @@ skills directory), the same folders should drop in unchanged — each is self-co
 ## 5-minute demo
 
 [`examples/demo-precip-trend/`](examples/demo-precip-trend/) walks through the whole
-pipeline on a small, synthetic scenario: a rough one-paragraph task description goes in,
-a plan, research notes, and a slide storyboard come out. Start there — reading the demo
-end to end takes about five minutes.
+loop on a small, synthetic scenario: a rough one-paragraph experiment log goes in, a
+plan, research notes, and a slide storyboard come out — the same shape as a real week's
+worth of "get this ready to show my advisor." Start there — reading it end to end takes
+about five minutes.
 
 ## Design principles
 
-- **Small.** Ten skills, one job each. No shared runtime, no plugin system, no config file.
-- **Plain outputs.** Everything a skill produces is a markdown file, a script, or a
-  standard file format (`.pptx`, `.png`) — nothing locked into this repo.
-- **Honest triggers.** Each skill lists the phrases that invoke it, in its own `SKILL.md`.
-  No hidden magic about when something fires.
+- **Small over comprehensive.** Ten skills, one job each. No shared runtime, no plugin
+  system, no config file.
+- **Demo-first.** If you can't see it working in five minutes, it's not documented well
+  enough yet.
+- **Human-in-the-loop.** Every skill proposes; you approve. Plans get reviewed before
+  execution, reports get read before they're sent.
+- **File-based.** Everything a skill produces is a markdown file, a script, or a
+  standard file format (`.pptx`, `.png`) — versioned with git, nothing locked into this
+  repo.
+- **Built from real use.** Every skill here has been used weekly on real analysis work,
+  not written once and left untested.
 - **No lock-in.** Stop using any single skill without breaking the others.
 
 ## Non-goals
 
-- **Not a framework.** There's no orchestration layer tying the skills together beyond the
-  plain-markdown handoffs described above.
-- **Not comprehensive.** These cover *my* workflow, not every research workflow. Missing a
-  step you need? Fork it, or open an issue.
+- This repo is not for autonomous research.
+- It does not replace scientific judgment.
+- It does not decide what claims are valid.
+- It does not turn vague ideas into publishable work without human review.
+- It is designed to reduce friction in planning, documenting, and presenting research
+  progress — not to remove the researcher from the loop.
 - **No magic infra.** `6-ppt-create` needs Pandoc and `python-pptx` on your machine —
-  that's a real dependency, not hidden away. `3-conduct-plan` is the heaviest skill here;
-  it expects a rough `readme.md` to drive and writes/runs code, so use it in normal
-  (not plan) mode.
+  that's a real dependency, not hidden away.
 - **One-way, not synced.** This repo is a manually maintained snapshot of skills I use
   privately. It does not auto-update from my personal setup, and pushing changes here
   won't pull anything from it either.
