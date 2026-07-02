@@ -27,28 +27,6 @@ can find them later, making figures presentable, building the same slide skeleto
 week — that's exactly what these skills offload. The judgment stays yours; the grunt
 work doesn't have to.
 
-## What it actually does
-
-Five recurring moments in a research week, each mapped to a skill:
-
-1. You have a vague idea → turn it into a concrete plan.
-2. You have scattered results and logs → turn them into organized notes.
-3. You're about to run something expensive → sanity-check the plan first.
-4. You have results → turn them into a short progress report.
-5. You need to present → turn the report/notes into a slide storyboard, then a deck.
-
-Two more run in the background the whole time: `noteit` catches an insight or a
-bug-fix detail the moment you have it, and `polish-plots` makes sure figures look
-presentable without you hand-tuning `rcParams` every time.
-
-## What it does not do
-
-- It does not decide what your research question should be.
-- It does not draw scientific conclusions for you.
-- It does not run unattended experiments while you're away.
-- It does not replace your judgment — you approve every meaningful step (plans get
-  reviewed before execution, reports get read before they're sent).
-
 ## Workflow
 
 ```
@@ -159,9 +137,11 @@ about five minutes.
 
 ## Non-goals
 
-- This repo is not for autonomous research.
-- It does not replace scientific judgment.
-- It does not decide what claims are valid.
+- This repo is not for autonomous research — it does not run unattended experiments
+  while you're away, and it does not decide what your research question should be.
+- It does not replace scientific judgment or decide what claims are valid — you
+  approve every meaningful step (plans get reviewed before execution, reports get read
+  before they're sent).
 - It does not turn vague ideas into publishable work without human review.
 - It is designed to reduce friction in planning, documenting, and presenting research
   progress — not to remove the researcher from the loop.
