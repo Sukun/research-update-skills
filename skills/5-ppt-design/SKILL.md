@@ -16,6 +16,17 @@ Both modes accepted. The output is a human-readable `.md` storyboard with explic
 
 This skill makes **content decisions**. It does NOT touch Pandoc or PPTX formatting — those belong to 6-ppt-create.
 
+---
+
+## When To Use
+
+Trigger this skill when prompts include phrases like:
+- "design slides"
+- "design a storyboard"
+- "make a slide storyboard"
+- "turn these notes into slides"
+- "build the presentation outline"
+- "storyboard this report"
 
 ---
 

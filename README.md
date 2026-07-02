@@ -3,33 +3,29 @@
 **Turn messy numerical experiment work into advisor-ready updates.**
 
 A small set of Claude Code skills built from my own daily research workflow. Not a
-research-automation framework. Not a giant skill library. Just the handful of steps I
-actually use every week to turn scattered experiment progress — half-finished scripts,
-a folder of figures, a few Slack-message-length insights — into a clear plan, clean
-notes, a short report, and a slide deck I can put in front of an advisor or
-collaborator without an extra hour of formatting.
+research-automation framework. Not a giant skill library.
+
+**Who this is for:** graduate students, postdocs, and early-career faculty who run
+numerical experiments, simulations, or data analysis as their main research activity,
+and who regularly have to explain "what did I actually do this week" to an advisor, PI,
+or collaborator.
+
+**Who this is not for:** people looking for a fully autonomous "AI does the research"
+system, a large all-purpose academic skill library (lectures, grant writing, email
+triage), or a workflow built around meetings and project management rather than
+hands-on computational work. If that's you, this probably isn't the right repo — no
+hard feelings, just save yourself the install.
+
+Just the handful of steps I actually use every week to turn scattered experiment
+progress — half-finished scripts, a folder of figures, a few Slack-message-length
+insights — into a clear plan, clean notes, a short report, and a slide deck I can put in
+front of an advisor or collaborator without an extra hour of formatting.
 
 If most of your "research overhead" is repetitive, mechanical, and eats time you'd
 rather spend on the actual science — writing up what you did, organizing notes so you
 can find them later, making figures presentable, building the same slide skeleton every
 week — that's exactly what these skills offload. The judgment stays yours; the grunt
 work doesn't have to.
-
-## Who this is for
-
-- Graduate students, postdocs, and early-career faculty
-- People who run numerical experiments, simulations, or data analysis as their main
-  research activity
-- Anyone who regularly has to explain "what did I actually do this week" to an advisor,
-  PI, or collaborator
-
-## Who this is not for
-
-- People looking for a fully autonomous "AI does the research" system
-- People who need a large, all-purpose academic skill library (lectures, grant writing,
-  email triage, etc.)
-- People whose main workflow is meetings, email, and project management rather than
-  hands-on computational work
 
 ## What it actually does
 
@@ -89,7 +85,7 @@ you have them, and `polish-plots` keeps matplotlib output consistent.
 | `5-ppt-design` | Before a group meeting or talk — deciding the story | "design slides" | `<topic>_<dd-mm-yyyy>.md` storyboard |
 | `6-ppt-create` | Once the storyboard is approved — mechanical export only | "export to pptx" | `.pptx`, rendered via Pandoc |
 | `organize-notes` | After a work session, before you forget the details | "organize research notes" | `RESEARCH_NOTES.md` index + `notes/<topic>.md` |
-| `noteit` | The moment you realize something worth remembering | "log this insight" | Dated, appended research-log entry |
+| `noteit` | The moment you realize something worth remembering | "save this insight" | Dated, appended research-log entry |
 | `polish-plots` | Before figures go into a report or slide | "polish plots" | Matplotlib script refactored onto a shared style |
 
 ## Install
