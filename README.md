@@ -104,7 +104,7 @@ folders with a `SKILL.md` that the agent reads and invokes by name.
 - Everything else needs nothing beyond Claude Code itself.
 
 ```bash
-git clone https://github.com/<you>/research-update-skills.git
+git clone https://github.com/Sukun/research-update-skills.git
 cp -r research-update-skills/skills/* ~/.claude/skills/
 ```
 
