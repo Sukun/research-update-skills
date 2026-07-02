@@ -98,18 +98,18 @@ anything that still needs it).
 Each skill is a function: an explicit invocation, a defined input, a defined output.
 No skill guesses which one you meant from a vague phrase — you call it directly.
 
-| Skill | When to use it | Invoke | Input | Output |
-|---|---|---|---|---|
-| `0-explore-data` | Starting a new dataset or project, before you plan against it | `/0-explore-data <path-to-project-or-data-dir>` | A data/project directory | `EDA_REPORT.md` + `eda_plots/` (quick-look plots) |
-| `1-plan-task` | Starting a new experiment or task | `/1-plan-task <work_dir>` | A rough task description (conversation context) | Structured plan doc at `<work_dir>/doc/*.md` |
-| `2-review-plan` | Before running something costly — cross-checks the plan against local docs/prior results | `/2-review-plan <path-to-plan.md>` | A plan file + a reference directory of existing code/notes | Verdict (ACCEPT / CONDITIONALLY_ACCEPT / REJECT) + fix list |
-| `3-conduct-plan` | Executing an already-reviewed plan end to end *(execution assistant — see note above)* | `/3-conduct-plan <path-to-readme.md>` | A reviewed instruction document | Written + run scripts, generated outputs, a clean sectioned research note |
-| `4-report` | After the experiment runs — gathers outputs into one document instead of writing up each figure by hand | `/4-report <notes_dir>` | A directory of research notes and figures | `TECH_REPORT_DRAFT.md` or `PAPER_DRAFT.md` |
-| `5-ppt-design` | Before a group meeting or talk — deciding the story | `/5-ppt-design <path-to-notes-or-draft>` | Research notes or a rough draft | `<topic>_<dd-mm-yyyy>.md` storyboard |
-| `6-ppt-create` | Once the storyboard is approved — mechanical export only | `/6-ppt-create <path-to-storyboard.md>` | An approved storyboard file | `.pptx`, rendered via Pandoc |
-| `organize-notes` | After a work session, before you forget the details | `/organize-notes <target_directory>` | A project directory with scattered notes/figures | `RESEARCH_NOTES.md` index + `notes/<topic>.md` |
-| `noteit` | Right after finishing an implementation or a fix — capture the detail before it's gone | `/noteit <what to remember>` | An insight, conclusion, or bug-fix detail | Dated entries appended to `docs/<PROJECT>_notes.md` + `~/docs/quick_notes.md` |
-| `polish-plots` | Before the numerical experiment (styled from the start) and again before `4-report` | `/polish-plots <path-to-script.py>` | A Python matplotlib script | The same script refactored onto the shared style templates |
+| Skill | When to use it | Invoke (input) | Output |
+|---|---|---|---|
+| `0-explore-data` | Starting a new dataset or project, before you plan against it | `/0-explore-data <path-to-project-or-data-dir>` — a data/project directory | `EDA_REPORT.md` + `eda_plots/` (quick-look plots) |
+| `1-plan-task` | Starting a new experiment or task | `/1-plan-task <work_dir>` — a rough task description (conversation context) | Structured plan doc at `<work_dir>/doc/*.md` |
+| `2-review-plan` | Before running something costly — cross-checks the plan against local docs/prior results | `/2-review-plan <path-to-plan.md>` — a plan file + a reference dir of existing code/notes | Verdict (ACCEPT / CONDITIONALLY_ACCEPT / REJECT) + fix list |
+| `3-conduct-plan` | Executing an already-reviewed plan end to end *(execution assistant — see note above)* | `/3-conduct-plan <path-to-readme.md>` — a reviewed instruction document | Written + run scripts, generated outputs, a clean sectioned research note |
+| `4-report` | After the experiment runs — gathers outputs into one document instead of writing up each figure by hand | `/4-report <notes_dir>` — a directory of research notes and figures | `TECH_REPORT_DRAFT.md` or `PAPER_DRAFT.md` |
+| `5-ppt-design` | Before a group meeting or talk — deciding the story | `/5-ppt-design <path-to-notes-or-draft>` — research notes or a rough draft | `<topic>_<dd-mm-yyyy>.md` storyboard |
+| `6-ppt-create` | Once the storyboard is approved — mechanical export only | `/6-ppt-create <path-to-storyboard.md>` — an approved storyboard file | `.pptx`, rendered via Pandoc |
+| `organize-notes` | After a work session, before you forget the details | `/organize-notes <target_directory>` — a project directory with scattered notes/figures | `RESEARCH_NOTES.md` index + `notes/<topic>.md` |
+| `noteit` | Right after finishing an implementation or a fix — capture the detail before it's gone in chatbox | `/noteit <what to remember>` — an insight, conclusion, or bug-fix detail | Dated entries appended to `docs/<PROJECT>_notes.md` + `~/docs/quick_notes.md` (for Obsidian/Notion) |
+| `polish-plots` | Polish matplotlib plots with predefined style | `/polish-plots <path-to-script.py>` — a Python matplotlib script | The same script refactored onto the shared style templates |
 
 ## Install
 
@@ -117,6 +117,7 @@ These are [Claude Code skills](https://docs.claude.com/en/docs/claude-code) — 
 folders with a `SKILL.md` that the agent reads and invokes by name.
 
 **Prerequisites:**
+
 - [Pandoc](https://pandoc.org/installing.html) — **required for `6-ppt-create`**
   (`brew install pandoc`, `apt install pandoc`, or see the link for other platforms).
 - `pip install python-pptx pillow` — also required for `6-ppt-create`.
