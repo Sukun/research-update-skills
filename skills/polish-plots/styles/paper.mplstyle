@@ -1,0 +1,33 @@
+## paper.mplstyle — paper / manuscript style
+## Use for: journal figures, printed reports, publication submissions
+## Historical source: internal analysis utilities (paper dialect)
+##
+## Load with:
+##   import matplotlib.pyplot as plt
+##   plt.style.use('seaborn-v0_8-paper')
+##   plt.style.use(os.path.expanduser('~/.claude/skills/polish-plots/styles/paper.mplstyle'))
+## Or via the layout helper:
+##   from plot_templates.layout import apply_style
+##   apply_style('paper')
+
+font.size        : 16
+axes.titlesize   : 16
+axes.labelsize   : 16
+xtick.labelsize  : 14
+ytick.labelsize  : 14
+legend.fontsize  : 14
+figure.titlesize : 16
+
+savefig.bbox        : tight
+savefig.pad_inches  : 0.05
+savefig.dpi         : 300
+
+lines.linewidth  : 1.5
+lines.markersize : 5
+
+legend.frameon      : True
+legend.framealpha   : 0.8
+legend.edgecolor    : none
+legend.loc          : upper right
+
+axes.prop_cycle : cycler('color', ['000000', 'E69F00', '009E73', 'D55E00', 'F0E442', '56B4E9', '0072B2', 'CC79A7'])

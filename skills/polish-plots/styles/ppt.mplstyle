@@ -1,0 +1,40 @@
+## ppt.mplstyle — PPT / presentation style
+## Use for: diagnostic figures, slide presentations, screen viewing
+## Historical source: internal visualization utilities (PPT dialect)
+##
+## Load with:
+##   import matplotlib.pyplot as plt
+##   plt.style.use('seaborn-v0_8-paper')
+##   plt.style.use(os.path.expanduser('~/.claude/skills/polish-plots/styles/ppt.mplstyle'))
+## Or via the layout helper:
+##   from plot_templates.layout import apply_style
+##   apply_style('ppt')
+
+font.size        : 18
+axes.labelsize   : 18
+xtick.labelsize  : 16
+ytick.labelsize  : 16
+legend.fontsize  : 18
+axes.titlesize   : 20
+figure.titlesize : 22
+
+savefig.bbox        : tight
+savefig.pad_inches  : 0.05
+savefig.dpi         : 300
+
+lines.linewidth  : 1.5
+lines.markersize : 6
+
+legend.frameon      : True
+legend.framealpha   : 0.8
+legend.edgecolor    : none
+legend.loc          : upper right
+
+##  colour-blind palette: black, red, green, orange, , yellow, sky-blue, blue, pink
+#axes.prop_cycle : cycler('color', ['000000', 'D55E00',  'E69F00', '009E73', 'F0E442', '56B4E9', '0072B2', 'CC79A7'])
+
+## matlab colors: black, red, blue, yellow, purple, green, cyan, dark-red
+#axes.prop_cycle : cycler('color', ['000000', 'D95319', '0072BD', 'EDB120', '7E2F8E', '77AC30', '4DBEEE', 'A2142F'])
+
+# matplotlib default (tab10/CN) palette
+axes.prop_cycle : cycler('color', ['1f77b4', 'ff7f0e', '2ca02c', 'd62728', '9467bd', '8c564b', 'e377c2', '7f7f7f', 'bcbd22', '17becf'])
