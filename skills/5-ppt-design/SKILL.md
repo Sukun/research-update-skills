@@ -1,7 +1,6 @@
 ---
 name: 5-ppt-design
-description: "Create a slide storyboard file (<topic>_<dd-mm-yyyy>.md) from a rough user draft or a research notes subset. This is the content-decision skill: what story to tell, what order, what figure goes on each slide, and what layout to use. Does NOT export PPTX — that is 6-ppt-create's job."
-license: MIT
+description: "Create a topic-and-date-named slide storyboard Markdown file from a rough user draft or a research notes subset. Use when deciding the story, slide order, selected figures, and layout before rendering. Do not export PPTX; use 6-ppt-create for mechanical rendering."
 ---
 # ppt_design — Slide Storyboard Skill
 
@@ -16,13 +15,6 @@ Both modes accepted. The output is a human-readable `.md` storyboard with explic
 
 This skill makes **content decisions**. It does NOT touch Pandoc or PPTX formatting — those belong to 6-ppt-create.
 
----
-
-## How To Invoke
-
-```
-/5-ppt-design <path-to-notes-or-draft>
-```
 
 ---
 
@@ -135,7 +127,7 @@ top-left is the visible slide identifier.
 
 **Always use absolute paths** for all figure references — in `![]()`, in `<!-- figures: ... -->`, and in `<!-- TODO: ... -->` placeholders.
 
-- ✓ `![](/path/to/project/tests/.../fig.png)`
+- ✓ `![](/path/to/project/figures/result.png)`
 - ❌ `![](../plots/rapid/straitflux/fig.png)`
 
 Relative paths break when the storyboard is moved or when 6-ppt-create resolves figures from a different working directory. Absolute paths are unambiguous regardless of where the PPTX is generated.

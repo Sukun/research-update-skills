@@ -21,12 +21,13 @@ Include which skill, what you expected, and what happened instead.
 
 ## Testing a skill locally
 
-Skills are just a folder with a `SKILL.md` that Claude Code reads. To try a change:
+Skills are folders with a `SKILL.md` that a compatible agent client reads. To try a
+change, copy it to the skill location used by your client:
 
 ```bash
-cp -r skills/<skill-name> ~/.claude/skills/<skill-name>
+cp -r skills/<skill-name> <client-skills-root>/<skill-name>
 ```
 
 Then invoke it explicitly (e.g. `/skill-name <target>`) in a real (or throwaway) working
-directory and check the output matches what the `SKILL.md` promises. There's no separate
-test suite — the skill's own output is the test.
+directory and check the output matches what the `SKILL.md` promises. Also run the portable
+tree validator from this repository before opening a PR.

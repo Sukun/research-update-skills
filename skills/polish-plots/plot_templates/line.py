@@ -110,3 +110,149 @@ def add_vline(ax, x, color='k', lw=0.8, ls='--', alpha=0.6, label=None, **kwargs
 def add_shading(ax, x_start, x_end, color='grey', alpha=0.15, label=None, **kwargs):
     """Add a background shading band (e.g. pre-Argo era)."""
     ax.axvspan(x_start, x_end, color=color, alpha=alpha, label=label, **kwargs)
+
+
+# Single source of truth for the 4 conventional corner anchors, shared by both manual
+# overrides (caller passes one of these keys directly) and place_text_auto() below.
+CORNER_ANCHORS = {
+    'upper left':  dict(x=0.02, y=0.98, ha='left',  va='top'),
+    'upper right': dict(x=0.98, y=0.98, ha='right', va='top'),
+    'lower left':  dict(x=0.02, y=0.02, ha='left',  va='bottom'),
+    'lower right': dict(x=0.98, y=0.02, ha='right', va='bottom'),
+}
+
+# Deterministic tie-break order when several corners score equally (e.g. uniform-density
+# data) — keeps output reproducible instead of dict/insertion-order dependent.
+_CORNER_TIE_BREAK = ['upper right', 'lower right', 'lower left', 'upper left']
+
+
+def _corner_box_axes_frac(corner, box_frac):
+    """Axes-fraction (x0, y0, x1, y1) rectangle for a corner probe box."""
+    wx, wy = box_frac
+    if corner == 'upper left':
+        return (0.0, 1.0 - wy, wx, 1.0)
+    if corner == 'upper right':
+        return (1.0 - wx, 1.0 - wy, 1.0, 1.0)
+    if corner == 'lower left':
+        return (0.0, 0.0, wx, wy)
+    if corner == 'lower right':
+        return (1.0 - wx, 0.0, 1.0, wy)
+    raise ValueError(f"unknown corner {corner!r}")
+
+
+def _rects_overlap(a, b):
+    ax0, ay0, ax1, ay1 = a
+    bx0, by0, bx1, by1 = b
+    return ax0 < bx1 and bx0 < ax1 and ay0 < by1 and by0 < ay1
+
+
+def place_text_auto(ax, xy_data, text, candidates=None, exclude=None,
+                     legend=None, box_frac=(0.35, 0.25), **text_kwargs):
+    """Place `text` in whichever corner of `ax` has the sparsest plotted data.
+
+    Scores the 4 conventional corners (`CORNER_ANCHORS` keys) by how many of the
+    already-plotted (x, y) points fall inside a small probe box in that corner, and
+    picks the sparsest one — so an annotation doesn't end up sitting on top of a curve.
+    If `legend` (the Legend artist already drawn on `ax`) is given, corners whose probe
+    box overlaps the legend's rendered bounding box are penalized so the annotation
+    doesn't collide with the legend either.
+
+    Does not attempt to place the legend itself — matplotlib's own `loc='best'` already
+    solves that well; this only handles the free-floating text case matplotlib has no
+    equivalent for.
+
+    Parameters
+    ----------
+    ax : Axes
+    xy_data : list of (x_array, y_array)
+        The already-plotted series (e.g. collected during the plotting loop). x may be
+        datetime-like (converted via matplotlib.dates.date2num) or plain numeric.
+    text : str
+        Annotation text. No-op (returns None) if falsy.
+    candidates : list of str, optional
+        Corner names to consider. Defaults to all of `CORNER_ANCHORS`.
+    exclude : iterable of str, optional
+        Corner names to remove from consideration (e.g. wherever a panel_label already
+        sits).
+    legend : Legend, optional
+        Legend artist already drawn on `ax`, used for the overlap penalty.
+    box_frac : (float, float)
+        (width, height) of each corner's probe box, as a fraction of the current
+        x/y data range. Default (0.35, 0.25).
+    **text_kwargs
+        Forwarded to ax.text() (e.g. fontsize=18). `ha`/`va`/`transform` are always set
+        from the chosen corner and must not be passed here.
+
+    Returns
+    -------
+    str or None
+        The corner name used, or None if `text` is falsy or no candidates remain.
+    """
+    if not text:
+        return None
+
+    candidates = list(candidates) if candidates is not None else list(CORNER_ANCHORS)
+    if exclude:
+        exclude = set(exclude)
+        candidates = [c for c in candidates if c not in exclude]
+    if not candidates:
+        return None
+
+    # Concatenate all plotted points, converting datetime-like x to numeric (date
+    # ordinals) to match ax.get_xlim()'s numeric representation on a date axis.
+    xs, ys = [], []
+    for x_arr, y_arr in xy_data:
+        try:
+            x_num = np.asarray(mdates.date2num(x_arr), dtype=float)
+        except (AttributeError, TypeError, ValueError):
+            x_num = np.asarray(x_arr, dtype=float)
+        y_num = np.asarray(y_arr, dtype=float)
+        xs.append(x_num)
+        ys.append(y_num)
+    x_all = np.concatenate(xs) if xs else np.array([])
+    y_all = np.concatenate(ys) if ys else np.array([])
+    finite = np.isfinite(x_all) & np.isfinite(y_all)
+    x_all, y_all = x_all[finite], y_all[finite]
+
+    x0, x1 = ax.get_xlim()
+    y0, y1 = ax.get_ylim()
+    wx, wy = box_frac
+
+    legend_bbox_frac = None
+    if legend is not None:
+        try:
+            ax.figure.canvas.draw()
+            renderer = ax.figure.canvas.get_renderer()
+            bbox = legend.get_window_extent(renderer).transformed(ax.transAxes.inverted())
+            legend_bbox_frac = (bbox.x0, bbox.y0, bbox.x1, bbox.y1)
+        except Exception:
+            legend_bbox_frac = None  # renderer unavailable on this backend — skip penalty
+
+    scores = {}
+    for corner in candidates:
+        anchor = CORNER_ANCHORS[corner]
+        bx0 = x0 + (0.0 if 'left' in corner else (1 - wx)) * (x1 - x0)
+        bx1 = bx0 + wx * (x1 - x0)
+        by0 = y0 + (0.0 if 'lower' in corner else (1 - wy)) * (y1 - y0)
+        by1 = by0 + wy * (y1 - y0)
+        if x_all.size:
+            score = float(np.count_nonzero(
+                (x_all >= bx0) & (x_all <= bx1) & (y_all >= by0) & (y_all <= by1)))
+        else:
+            score = 0.0
+        if legend_bbox_frac is not None:
+            box_frac_rect = _corner_box_axes_frac(corner, box_frac)
+            if _rects_overlap(box_frac_rect, legend_bbox_frac):
+                score += 1e6
+        scores[corner] = score
+
+    min_score = min(scores.values())
+    best = [c for c in candidates if scores[c] == min_score]
+    chosen = next((c for c in _CORNER_TIE_BREAK if c in best), best[0])
+
+    anchor = CORNER_ANCHORS[chosen]
+    for k in ('ha', 'va', 'transform'):
+        text_kwargs.pop(k, None)
+    ax.text(anchor['x'], anchor['y'], text, transform=ax.transAxes,
+            ha=anchor['ha'], va=anchor['va'], **text_kwargs)
+    return chosen

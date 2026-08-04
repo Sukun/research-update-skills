@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.0] - 2026-08-04
+
+### Added
+- Approval-gated `TASK_CONTRACT.md` planning with Non-Goals, Scope Budget, allowed
+  changed files, stop conditions, and a portable validator.
+- `RUN_RECORD.json` and factual `VALIDATION.md` boundaries for contract execution.
+- `claude-figure-style` and a portable public-skill-tree validator.
+- Automatic corner placement for free text annotations in `polish-plots`, with numeric
+  and datetime axis support.
+
+### Changed
+- Split bounded execution (`3-conduct-plan`) from explicit scientific interpretation
+  (`4-report`); no skill silently adds fixes, generalisation, reports, or extra outputs.
+- Reworked the example and README around the approval and provenance model.
+- Removed machine-specific paths, project identifiers, personal examples, and private
+  historical code inventories from the public release.
+
 ## [0.1.0] - 2026-07-02
 
 Initial public release.

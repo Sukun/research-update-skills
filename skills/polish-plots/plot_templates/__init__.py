@@ -16,6 +16,8 @@ Line plots:
     add_hline(ax, y)
     add_vline(ax, x)
     add_shading(ax, x_start, x_end)
+    place_text_auto(ax, xy_data, text, ...)  — auto-corner text annotation, avoiding data/legend
+    CORNER_ANCHORS                            — shared corner-name -> (x, y, ha, va) table
 
 Filled contour / pcolormesh:
     plot_contourf(ax, x, y, z, ...)
@@ -46,6 +48,8 @@ from .line import (
     add_hline,
     add_vline,
     add_shading,
+    place_text_auto,
+    CORNER_ANCHORS,
 )
 
 from .contourf import (
@@ -68,6 +72,7 @@ from .colorbar import (
 __all__ = [
     'apply_style', 'make_figure', 'make_gridspec_figure', 'save_fig', 'pad_yaxis',
     'line_plot', 'format_time_axis', 'add_hline', 'add_vline', 'add_shading',
+    'place_text_auto', 'CORNER_ANCHORS',
     'plot_contourf', 'plot_pcolormesh',
     'make_map_ax', 'plot_map_field', 'make_map_grid',
     'add_colorbar', 'add_shared_colorbar', 'add_bottom_colorbar',

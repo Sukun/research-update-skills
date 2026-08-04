@@ -1,11 +1,11 @@
 ## ppt.mplstyle — PPT / presentation style
 ## Use for: diagnostic figures, slide presentations, screen viewing
-## Historical source: internal visualization utilities (PPT dialect)
+## Presentation-oriented defaults
 ##
 ## Load with:
 ##   import matplotlib.pyplot as plt
 ##   plt.style.use('seaborn-v0_8-paper')
-##   plt.style.use(os.path.expanduser('~/.claude/skills/polish-plots/styles/ppt.mplstyle'))
+##   plt.style.use('<plot-skill-root>/styles/ppt.mplstyle')
 ## Or via the layout helper:
 ##   from plot_templates.layout import apply_style
 ##   apply_style('ppt')

@@ -1,13 +1,13 @@
 """
 polish-plots — project-wide matplotlib style and plotting helpers.
 
-Bundled directly inside the ~/.claude/skills/polish-plots skill folder — fully
-self-contained, no external shared-plotting package required.
+Bundled directly inside the polish-plots skill folder — fully self-contained, with no
+external shared-plotting package required.
 
 Quick start
 -----------
-    import sys, os
-    sys.path.insert(0, os.path.expanduser('~/.claude/skills/polish-plots'))
+    import sys
+    sys.path.insert(0, '<plot-skill-root>')
 
     from plot_templates.layout import apply_style, make_figure, save_fig
     from plot_templates.line import line_plot

@@ -88,6 +88,28 @@ def remove_empty_placeholders(slide):
         if not all_text.strip():
             sp_tree.remove(shape._element)
 
+def enforce_content_placeholder_geometry(slide, slide_w, slide_h, has_tag, n_pics):
+    """Widen/reposition the body content placeholder on section-tagged, picture-less
+    slides (Outline, Method, Summary) to 90% width, centred, starting just below the chip.
+
+    Picture slides are skipped here — ensure_bullet_placeholder() (called from the
+    figure-fitting paths) already sets the correct compact top-band geometry for them.
+    Cover slides / untagged slides are skipped entirely: touching a layout-inherited
+    placeholder's geometry without setting all four xfrm fields can zero out height.
+    """
+    if not has_tag or n_pics > 0:
+        return
+    for ph in slide.placeholders:
+        if ph.placeholder_format.idx == 0:
+            continue
+        if not ph.has_text_frame:
+            continue
+        ph.left = int(slide_w * 0.05)
+        ph.width = int(slide_w * 0.90)
+        ph.top = int(Inches(0.52))
+        ph.height = int(slide_h - Inches(0.60))
+        break
+
 def format_notes_one_sentence_per_line(slide):
     """Reformat speaker notes so each sentence occupies its own paragraph."""
     import re
@@ -381,6 +403,10 @@ def main():
             clear_title(slide)
 
         remove_empty_placeholders(slide)
+
+        n_pics_now = len([s for s in slide.shapes if s.shape_type == 13])
+        enforce_content_placeholder_geometry(slide, slide_w, slide_h, bool(tag_info), n_pics_now)
+
         set_body_font(slide)
 
         has_bullets = False
@@ -404,7 +430,15 @@ def main():
         if idx in LAYOUT_MAP.get("figure-dominant", []) and fig_path:
             reposition_figure_dominant(slide, fig_path, slide_w, slide_h, idx)
         elif 1 <= len([s for s in slide.shapes if s.shape_type == 13]) <= 4:
-            if bullet_shape is None and has_bullets:
+            # Always re-normalize geometry here, even if a bullet placeholder was
+            # already found above — that placeholder still has Pandoc's raw
+            # two-column geometry (narrow width, near-full-slide height). Without
+            # this call the figure-region math treats that raw placeholder as
+            # final, leaving only a sliver of vertical space for the picture.
+            # This branch is the safety net for any slide missing from
+            # LAYOUT_MAP["figure-dominant"] (e.g. an off-by-one in slide_idx),
+            # so it must produce the same compact top band as the explicit path.
+            if has_bullets:
                 bullet_shape = ensure_bullet_placeholder(slide, slide_w)
             _fit_pictures_to_bottom_region(slide, idx, slide_w, slide_h, bullet_shape)
             _resolve_text_picture_overlap(slide, bullet_shape)

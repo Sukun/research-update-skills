@@ -1,8 +1,6 @@
 ---
 name: 6-ppt-create
-description: "Pure mechanical renderer: reads a ppt_design storyboard file (<topic>_<dd-mm-yyyy>.md) and produces a .pptx via Pandoc + python-pptx post-processing. Validates titles, detects figure aspect ratios, applies layout rules. No content decisions — all story/layout intent comes from the storyboard."
-license: MIT
-model: haiku
+description: "Render an approved topic-and-date-named slide storyboard into a PPTX with Pandoc and python-pptx post-processing. Use after 5-ppt-design has fixed all story and layout decisions. Validate titles and figures and apply mechanical layout rules without changing content."
 ---
 
 # ppt_create — Slide Renderer Skill
@@ -22,11 +20,11 @@ Four-phase workflow:
 
 ---
 
-## How To Invoke
+## When To Use
 
-```
-/6-ppt-create <path-to-storyboard.md>
-```
+Trigger when prompts include:
+- "create ppt"
+- "export to pptx"
 
 ---
 
@@ -277,7 +275,11 @@ In Pandoc PPTX output, speaker notes use `::: notes` fenced div syntax — **not
 
 1. Read the storyboard file. Collect all figure paths, `<!-- section-tag: ... -->`, `<!-- layout: ... -->`, and `<!-- figures: ... -->` annotations.
 2. Run batched aspect detection script (see Aspect Ratio Detection section). Detection auto-proceeds — both W and H are scaled proportionally in the template.
-3. Parse all slides. For each slide, check:
+3. **Compute slide_idx by counting `## ` headings, never by splitting on `\n---\n`.**
+   Slide index (0-based) = position of the slide's `## ` heading among all `## ` headings in the file, in order. This is the ONLY method that is guaranteed to match Pandoc's real output slide order, because Pandoc creates exactly one slide per `## ` heading and nothing else.
+   **Do not** derive slide_idx from `re.split(r'\n---\n', content)` block position. Storyboards from /5-ppt-design open with an empty YAML frontmatter delimiter (`---\n---\n`) before the cover slide's heading. Splitting on `---` treats that frontmatter as block 0, silently shifting every subsequent index by +1 — every SECTION_TAGS/LAYOUT_MAP/FIGURES key then targets the wrong slide, and the true first content slide gets skipped entirely (falls through Phase 4 unprocessed).
+   Sanity check before proceeding: `grep -c '^## ' <STORYBOARD>` must equal the slide count Pandoc reports after Phase 3 export (`len(prs.slides)`). If they don't match, stop and find the extra/missing heading before writing the DATA BLOCK.
+   Parse all slides. For each slide, check:
    - **Title presence** — every slide must have a `## Heading` (required for Pandoc).
    - **Title length** ≤ 65 chars. Collect overlong titles.
    - **Figure paths** — verify each `![]()` path exists relative to storyboard directory. If not, ask user to fix or confirm ignoring.
@@ -309,11 +311,13 @@ Before adding column syntax to a slide, check whether that slide's block already
 
 ### PHASE 3 — Export
 
-1. Locate pandoc — prefer a conda environment if you keep one for this:
+1. Locate Pandoc on the current `PATH`:
    ```bash
-   PANDOC=$(command -v pandoc)
-   $PANDOC --version 2>/dev/null | head -1 || { echo "pandoc not found on PATH"; exit 1; }
-   echo "Using pandoc: $PANDOC"
+   PANDOC=$(command -v pandoc) || {
+     echo "Pandoc is required; install it and ensure it is on PATH." >&2
+     exit 1
+   }
+   "$PANDOC" --version | head -1
    ```
 2. If no `reference.pptx` is present in the storyboard directory, use the Pandoc default template (omit `--reference-doc`).
 3. Run pandoc:
@@ -327,15 +331,25 @@ Before adding column syntax to a slide, check whether that slide's block already
 
 ### PHASE 4 — Post-process (python-pptx)
 
-**Do NOT regenerate the full processing script.** The static template lives at:
-`~/.claude/skills/6-ppt-create/postprocess_template.py`
+**Do NOT regenerate the full processing script.** The static template is bundled as
+`postprocess_template.py` in this skill folder.
 
 Read that file, fill in **only the DATA BLOCK** at the top (PPTX_PATH, SECTION_TAGS, LAYOUT_MAP, FIGURES) from the storyboard parse — roughly 15–20 lines. Write the filled script to `postprocess_slides.py` in the storyboard directory and run it.
+
+**Before writing the DATA BLOCK, verify the index mapping against the real exported pptx** (this catches the off-by-one class of bug where a frontmatter block gets counted as slide 0):
+```python
+from pptx import Presentation
+prs = Presentation("<OUTPUT>.pptx")
+for i, s in enumerate(prs.slides):
+    t = s.shapes.title
+    print(i, t.text_frame.text if (t and t.has_text_frame) else None)
+```
+Print this list and manually confirm slide_idx 0 = cover, and every SECTION_TAGS/LAYOUT_MAP/FIGURES key you're about to write matches the title actually shown at that index (titles are still visible at this point — they're only cleared in step 4T, which runs later). If any key targets the wrong title, recompute slide_idx via the heading-count method (Phase 1 step 3) — do not adjust by guessing an offset.
 
 #### DATA BLOCK reference
 
 **`SECTION_TAGS`** — from `<!-- section-tag: "X" color="Y" -->` annotations:
-- Key: slide index (0-based). Value: `("tag_text", "color_name")`.
+- Key: slide index (0-based), matching the real pptx slide order (verified above) — **not** the position of a `\n---\n`-split block.
 - Cover slide (index 0) normally has no entry.
 
 **`LAYOUT_MAP`** keys (hyphenated to match `<!-- layout: ... -->` tags from /5-ppt-design):
@@ -353,8 +367,7 @@ Read that file, fill in **only the DATA BLOCK** at the top (PPTX_PATH, SECTION_T
 
 #### Static template
 
-The full template lives at:
-`~/.claude/skills/6-ppt-create/postprocess_template.py`
+The full template is `postprocess_template.py` in this skill folder.
 
 **Phase 4 procedure:**
 1. Read the template file.
@@ -389,13 +402,30 @@ Use 20 pt for non-title text by default. If text-band overlap with figures is de
   - `top = int(Inches(0.52))` — starts just below the chip (chip is ~0.05"–0.41")
   - `height = int(slide_h − Inches(0.60))` — fills to 0.10" from slide bottom
   - Without this, Pandoc leaves `top=1.31"` (space for the cleared title), wasting ~0.9" and shortening the usable text area.
-- **Section-tagged picture slides** (n_pics ≥ 1): skip. `_compact_text_placeholder()` inside `fit_pictures_bottom()` sets all four values to the correct compact band.
+- **Section-tagged picture slides** (n_pics ≥ 1): skip. `ensure_bullet_placeholder()`, called from both the `figure-dominant` path and the generic 1-4-picture fallback, sets all four values to the correct compact band.
 
 Always set all four geometry attributes together when touching any of them. Setting only `left` or `width` on a shape without an explicit `<a:xfrm>` in the slide XML causes python-pptx to emit a new `<a:xfrm>` with `cx` set but `cy=0`, making the placeholder invisible.
+
+**The generic 1-4-picture fallback branch is a safety net, not just a fallback — it must fully normalize geometry, not just detect bullets.** If a slide is missing from `LAYOUT_MAP["figure-dominant"]` (e.g. from an indexing mistake), it drops into the `elif 1 <= n_pics <= 4` branch in `main()`. That branch must call `ensure_bullet_placeholder()` whenever `has_bullets` is true, even if a bullet placeholder was already found during detection — the one found during detection still has Pandoc's raw two-column geometry (narrow width, near-full-slide height), not the compact top band. Skipping the re-normalization call (e.g. guarding it with `if bullet_shape is None`) leaves that oversized placeholder in place, which starves the figure-region calculation down to a sliver — this is what produces the "narrow text box + extremely tiny figure" failure mode (see Common Pitfalls below).
 
 **Section tag width:** Always 70% of slide width (`int(slide_w * 0.70)`). Never use a fixed inch value.
 
 **Section tag text format:** Use a comprehensive hierarchical label: `"[Presentation] · [Section] · [Slide topic]"`. Examples: `"OSNAP · σ₀ space · time series"`, `"OSNAP · west · T-S & MOC vs MLD"`. Short sections may omit the third level: `"OSNAP · Outline"`. Tags must be specific enough that a reader knows exactly where in the presentation they are.
+
+---
+
+## Common Pitfalls
+
+### "Narrow text box + extremely tiny figure" on a slide that should be figure-dominant
+
+**Symptom**: On one or more figure slides, the bullet text sits in a narrow ~30%-width column (Pandoc's raw two-column layout, untouched) and the figure is squeezed into a sliver at the very bottom of the slide.
+
+**Root cause**: The slide's real 0-based index (matching `prs.slides` order) is missing from `LAYOUT_MAP["figure-dominant"]` in the DATA BLOCK — almost always because slide_idx was computed by splitting the storyboard on `\n---\n` instead of counting `## ` headings (see Phase 1 step 3). A leading empty YAML frontmatter (`---\n---\n`) counts as a phantom block under the `\n---\n`-split method, shifting every subsequent index by +1. The affected slide then falls through to the generic 1-4-picture fallback branch, which (before the fix) left the pre-existing raw placeholder ungeometry-normalized, so the figure-region math computed almost zero space for the picture.
+
+**Fix**:
+1. Recompute all DATA BLOCK indices via the heading-count method, not block-split position.
+2. Run the verification snippet in Phase 4 (print `slide_idx, title` from the actual exported pptx) and cross-check every key before writing `postprocess_slides.py`.
+3. As a safety net, `postprocess_template.py`'s fallback branch now unconditionally calls `ensure_bullet_placeholder()` when `has_bullets` is true, so even a mis-indexed slide gets correct compact-band geometry — but this does not fix a wrong section-tag label or a missing hstack-3/vstack-3/table treatment on that slide, which still require the index to be correct.
 
 ---
 

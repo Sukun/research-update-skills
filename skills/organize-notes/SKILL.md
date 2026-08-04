@@ -1,7 +1,6 @@
 ---
 name: organize-notes
-description: "Maintain a living RESEARCH_NOTES.md index plus per-topic sub-notes in notes/. Handles initial creation and incremental updates as project files are added, moved, or removed. Two-phase workflow: diff + propose, then write only after explicit approval."
-license: MIT
+description: "Maintain a living RESEARCH_NOTES.md index plus per-topic sub-notes in notes/. Use when asked to create, organize, or update research notes as project files change. First present a bounded diff, then write only after explicit approval. Organize existing facts without adding scientific interpretation."
 ---
 
 # Research Notes Organizer Skill
@@ -17,11 +16,16 @@ Maintain a **modular, living documentation system** for a research project:
 
 ---
 
-## How To Invoke
+## When To Use
 
-```
-/organize-notes <target_directory>
-```
+Trigger when prompts include:
+- "organize research notes"
+- "update RESEARCH_NOTES"
+- "compile research progress"
+- "add [topic] to the notes"
+- "notes are out of date"
+- "create research memo"
+- "maintain research documentation"
 
 ---
 
@@ -42,7 +46,7 @@ Maintain a **modular, living documentation system** for a research project:
 ---
 title: "[Project] Research Notes"
 project: [project name]
-author: Sukun Cheng
+author: [optional]
 last_updated: YYYY-MM-DD
 status: living document
 ---
@@ -93,8 +97,8 @@ Objective, hypothesis, input data (dataset, variables, time range, grid), method
 ![Short description](../figures/topic_a_result.png){width="90%"}
 *Figure 1: [experiment] — what it shows.*
 
-## Result Analysis
-3–5 sentence prose summary referencing specific figures.
+## Recorded Interpretation
+Include only interpretation already supplied by the user or an explicitly approved source. Otherwise write: `No scientific interpretation requested.`
 ```
 
 ---
@@ -109,6 +113,7 @@ Objective, hypothesis, input data (dataset, variables, time range, grid), method
 **Out of scope — never open:**
 - `.nc`, `.zarr`, `.npy`, `.npz`, `.h5`, `.hdf5`, binary files
 - Any file outside the target directory
+- Inferring physical meaning, deciding whether a hypothesis is supported, or adding scientific conclusions
 
 ---
 
@@ -202,4 +207,5 @@ python3 -c "from PIL import Image; w,h=Image.open('path.png').size; print(w/h)"
 - **Never modify existing files** other than `RESEARCH_NOTES.md` and `notes/*.md`.
 - **Never write outside the target directory.**
 - Do not run model code or heavy computations.
+- Organise observed facts separately from interpretation. Never infer or append scientific meaning unless the user explicitly requests a separate `4-report` stage.
 - When in doubt about whether to include something, keep it.

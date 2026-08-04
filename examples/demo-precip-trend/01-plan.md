@@ -1,71 +1,91 @@
-# docs/precip_trend_plan.md (output of 1-plan-task)
+# Task Contract
 
-```
-purpose:
-  Determine whether station-observed monthly precipitation shows a statistically
-  meaningful upward or downward trend over the last 20 years across the region covered
-  by data/stations/, prompted by an informal observation that recent years "look wetter."
+## Conclusion
 
-background:
-  No prior formal trend analysis exists for this station network. The observation is
-  anecdotal (from a colleague), so this is an exploratory first pass rather than a
-  confirmatory study.
+Create one reproducible regional annual-total time-series figure from the supplied station
+files, subject to a bounded validation.
 
-reference work:
-  None found in this workspace. If a regional trend study exists elsewhere, link it here
-  before starting Stage 3 (enrich).
+## Relevance
 
-research scope:
-  - All ~40 stations in data/stations/, no sub-regional filtering initially.
-  - Last 20 years of available record (trim shorter series; flag stations with >20%
-    missing months rather than silently dropping them).
+The figure is a bounded input to a later research discussion; it is not itself a trend
+claim.
 
-research questions:
-  - Is there a significant linear trend in annual precipitation totals, region-wide?
-  - Do individual stations disagree in trend direction, or is the signal spatially
-    consistent?
-  - Is the "wetter recently" impression driven by a genuine trend or by a few recent
-    anomalous years?
+## Deliverables
 
-hypotheses / expected outcomes:
-  - Most likely outcome: weak or non-significant trend at the majority of stations,
-    with a handful of individually significant stations — this is common for
-    station-level precip trends over 20-year windows.
-  - The anecdotal impression may be driven by 2-3 recent wet years rather than a trend.
+- `scripts/make_regional_series.py` — reproducible processing script.
+- `outputs/regional_annual_total.png` — one annual-total time series.
+- Workflow record: `outputs/RUN_RECORD.json`.
+- Validation record: `outputs/VALIDATION.md`.
 
-methodology / approach:
-  - Aggregate monthly totals to annual totals per station; handle gaps by requiring
-    >=10 valid months/year, else mark that year missing.
-  - Fit Sen's slope + Mann-Kendall trend test per station (robust to non-normality and
-    missing years, standard choice for hydrological trend work).
-  - Also compute the region-mean annual series and test that directly.
-  - Map per-station trend direction/significance to check spatial consistency.
+## Inputs
 
-data sources:
-  - data/stations/*.csv — monthly precipitation totals, one file per station.
-  - Check header row for units (assume mm unless stated otherwise) and missing-value
-    flag before aggregating.
+- Data: `data/stations/*.csv`.
+- Variables: monthly precipitation total and station identifier.
+- Time range: all complete years present in the input files.
+- Depth range: not applicable.
+- Region/grid: all supplied stations, unweighted mean.
+- Units: millimetres; stop if units are absent or inconsistent.
+- Code to reuse: `scripts/io_helpers.py`.
+- Environment/configuration: existing project Python environment.
 
-work path:
-  ./  (this working directory)
+## Non-Goals
 
-deliverables:
-  - Trend map (per-station Sen's slope, significance marked).
-  - Region-mean annual timeseries plot with trend line.
-  - Short writeup answering the three research questions above.
+- No scientific interpretation or trend significance test.
+- No parameter variants, map, report, slides, new dependency, or unrelated refactor.
+- No raw-data modification or changes outside the allowed files.
 
-success criteria:
-  - Every station's trend result is reproducible from a single script.
-  - The writeup explicitly separates "significant trend" from "recent anomalous years"
-    so the Friday presentation doesn't overclaim.
+## Scope Budget
 
-risks / dependencies:
-  - Station gap patterns are unknown until explored — may need to drop stations with
-    too little coverage, changing the "40 stations" scope.
-  - No pre-existing regional baseline to sanity-check results against.
+- Primary experiments: 1
+- Sanity checks: 1
+- Parameter variants: 0
+- Expected figures: 1
+- Extra reports or presentations: 0
+- New dependencies: 0
+- Unrelated refactors: 0
+- Scientific interpretation: 0
+- Expected files to modify: 4
+- HPC run required: no
+- Compute scale: local bounded
+- External data download required: no
 
-notes:
-  - Stage 2 (critical review): flagged that "trending up or down" is ambiguous between
-    total precipitation and precipitation intensity/frequency — scope is fixed to
-    totals only, extreme-event framing is explicitly out of scope for this pass.
-```
+## Files Allowed to Change
+
+- `scripts/make_regional_series.py`
+- `outputs/regional_annual_total.png`
+- `outputs/RUN_RECORD.json`
+- `outputs/VALIDATION.md`
+
+## Execution Plan
+
+1. Inspect CSV headers and a small sample; stop if the approved variable or units are absent.
+2. Aggregate complete station-years using the existing missing-month convention and run one bounded sanity check.
+3. Write the approved figure and workflow records only if the sanity check passes.
+
+## Success Criteria
+
+- The script exits successfully on the approved inputs.
+- The output has one annual series with labelled units.
+- Raw inputs remain unchanged.
+- Every output is generated from the approved configuration.
+- Run and validation metadata are recorded.
+
+## Risks
+
+- Inconsistent units or missing-month conventions can invalidate the aggregation.
+
+## Stop Conditions
+
+- A required file, variable, unit, or shared convention is absent or inconsistent.
+- The requested scope, output count, compute, dependencies, or changed files must expand.
+- Bounded validation fails in a way that changes the approved method.
+
+## Blocking Questions
+
+- None.
+
+## Approval Status
+
+- Status: `APPROVED`
+- Approved by: example user
+- Approved at: 2026-08-04T12:00:00Z
