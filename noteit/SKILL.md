@@ -1,7 +1,6 @@
 ---
 name: noteit
-description: "Log research insights and work-progress records into two persistent files: a per-project notes file (./docs/<PROJECT_NAME>_notes.md) for detailed reasoning, and a global quick-notes file (~/docs/quick_notes.md) for short Obsidian-compatible progress entries. New entries are prepended (most recent first). Trigger with 'log note', 'log this', 'save this insight', 'note that [...]', or 'add to research log'."
-license: "Internal research use"
+description: "Log research insights and work-progress records into a project-named notes file under ./docs and a global Obsidian-compatible quick-notes file. Use only when the user explicitly says log note, log this, save this insight, note that, or add to research log. Prepend new entries."
 ---
 
 # Research Note Logger

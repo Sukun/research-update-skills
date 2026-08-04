@@ -1,7 +1,6 @@
 ---
 name: polish-plots
 description: "Apply the bundled shared-plotting style conventions to any Python matplotlib script. Replaces raw plt.rcParams blocks, plt.savefig(), and inline fontsize overrides with calls to the plot_templates helpers bundled in this skill. Trigger with: 'polish plots', 'polish this figure', 'apply shared style', 'fix plot style', or 'use shared_plotting'."
-license: "Internal research use"
 ---
 
 # Plot Polish Skill
@@ -9,7 +8,7 @@ license: "Internal research use"
 ## Purpose
 
 Refactor any Python plotting script to use the shared plotting helpers bundled
-with this skill (`~/.claude/skills/polish-plots/plot_templates/`, `styles/`,
+with this skill (`~/.agents/skills/polish-plots/plot_templates/`, `styles/`,
 `docs/`), enforcing consistent style across all projects.
 
 This skill is **fully self-contained** — the helper code, mplstyle files, and
@@ -41,7 +40,7 @@ Invoke this skill when the user says any of:
 Before writing any matplotlib code, check whether a helper already exists:
 
 ```
-~/.claude/skills/polish-plots/plot_templates/
+~/.agents/skills/polish-plots/plot_templates/
 ```
 
 The following helpers are available:
@@ -54,7 +53,7 @@ The following helpers are available:
 Import from the package root:
 ```python
 import sys, os
-sys.path.insert(0, os.path.expanduser('~/.claude/skills/polish-plots'))
+sys.path.insert(0, os.path.expanduser('~/.agents/skills/polish-plots'))
 from plot_templates import apply_style, make_figure, save_fig
 ```
 
@@ -215,7 +214,7 @@ which `apply_style` replaces):
 
 ```python
 import sys, os
-sys.path.insert(0, os.path.expanduser('~/.claude/skills/polish-plots'))
+sys.path.insert(0, os.path.expanduser('~/.agents/skills/polish-plots'))
 from plot_templates.layout import apply_style, make_figure, save_fig
 ```
 
@@ -269,7 +268,7 @@ Style files: `styles/ppt.mplstyle`, `styles/paper.mplstyle` (in this skill folde
 
 ## Where to find information
 
-All paths below are relative to this skill folder (`~/.claude/skills/polish-plots/`):
+All paths below are relative to this skill folder (`~/.agents/skills/polish-plots/`):
 
 | Question | Where to look |
 |----------|--------------|

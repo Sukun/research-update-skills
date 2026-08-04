@@ -1,7 +1,6 @@
 ---
 name: 5-ppt-design
-description: "Create a slide storyboard file (<topic>_<dd-mm-yyyy>.md) from a rough user draft or a research notes subset. This is the content-decision skill: what story to tell, what order, what figure goes on each slide, and what layout to use. Does NOT export PPTX — that is 6-ppt-create's job."
-license: "Internal research use"
+description: "Create a topic-and-date-named slide storyboard Markdown file from a rough user draft or a research notes subset. Use when deciding the story, slide order, selected figures, and layout before rendering. Do not export PPTX; use 6-ppt-create for mechanical rendering."
 ---
 # ppt_design — Slide Storyboard Skill
 

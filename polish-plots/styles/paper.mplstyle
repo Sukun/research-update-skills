@@ -5,7 +5,7 @@
 ## Load with:
 ##   import matplotlib.pyplot as plt
 ##   plt.style.use('seaborn-v0_8-paper')
-##   plt.style.use(os.path.expanduser('~/.claude/skills/polish-plots/styles/paper.mplstyle'))
+##   plt.style.use(os.path.expanduser('~/.agents/skills/polish-plots/styles/paper.mplstyle'))
 ## Or via the layout helper:
 ##   from plot_templates.layout import apply_style
 ##   apply_style('paper')

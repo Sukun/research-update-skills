@@ -1,8 +1,6 @@
 ---
 name: 6-ppt-create
-description: "Pure mechanical renderer: reads a ppt_design storyboard file (<topic>_<dd-mm-yyyy>.md) and produces a .pptx via Pandoc + python-pptx post-processing. Validates titles, detects figure aspect ratios, applies layout rules. No content decisions — all story/layout intent comes from the storyboard."
-license: "Internal research use"
-model: haiku
+description: "Render an approved topic-and-date-named slide storyboard into a PPTX with Pandoc and python-pptx post-processing. Use after 5-ppt-design has fixed all story and layout decisions. Validate titles and figures and apply mechanical layout rules without changing content."
 ---
 
 # ppt_create — Slide Renderer Skill
@@ -332,7 +330,7 @@ Before adding column syntax to a slide, check whether that slide's block already
 ### PHASE 4 — Post-process (python-pptx)
 
 **Do NOT regenerate the full processing script.** The static template lives at:
-`/home/users/tg932198/.claude/skills/6-ppt-create/postprocess_template.py`
+`~/.agents/skills/6-ppt-create/postprocess_template.py`
 
 Read that file, fill in **only the DATA BLOCK** at the top (PPTX_PATH, SECTION_TAGS, LAYOUT_MAP, FIGURES) from the storyboard parse — roughly 15–20 lines. Write the filled script to `postprocess_slides.py` in the storyboard directory and run it.
 
@@ -368,7 +366,7 @@ Print this list and manually confirm slide_idx 0 = cover, and every SECTION_TAGS
 #### Static template
 
 The full template lives at:
-`/home/users/tg932198/.claude/skills/6-ppt-create/postprocess_template.py`
+`~/.agents/skills/6-ppt-create/postprocess_template.py`
 
 **Phase 4 procedure:**
 1. Read the template file.

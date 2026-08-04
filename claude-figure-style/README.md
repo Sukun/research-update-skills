@@ -22,8 +22,8 @@ it automatically.
 ## Install (personal, all projects)
 
 ```bash
-mkdir -p ~/.claude/skills
-cp -r /path/to/figure-style ~/.claude/skills/figure-style
+mkdir -p ~/.agents/skills
+cp -r /path/to/figure-style ~/.agents/skills/claude-figure-style
 ```
 
 ## Verify it loads

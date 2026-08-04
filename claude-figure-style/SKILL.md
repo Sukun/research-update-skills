@@ -1,5 +1,5 @@
 ---
-name: figure-style
+name: claude-figure-style
 description: This skill should be used when the user is preparing a final scientific figure for a paper, thesis, poster, or report submission — polishing a plot to meet publication requirements, checking DPI/font/color-accessibility/label conventions, or reviewing a figure against journal figure guidelines. Use when the user says "polish this figure", "make this publication-ready", "check my figure for journal submission", "fix the fonts/DPI/colors on this plot", or asks for a pre-submission figure checklist. Not for exploratory/EDA plots — only for figures that will ship.
 ---
 
