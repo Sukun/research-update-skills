@@ -1,13 +1,13 @@
 ---
 name: 6-ppt-create
-description: "Render an approved topic-and-date-named slide storyboard into a PPTX with Pandoc and python-pptx post-processing. Use after 5-ppt-design has fixed all story and layout decisions. Validate titles and figures and apply mechanical layout rules without changing content."
+description: "Render an approved topic-and-date-named slide storyboard into a PPTX with Pandoc and python-pptx post-processing. Accepts any compatible storyboard — from 5-ppt-design, 4-mk_quickview's share step (md_to_slides.py / assemble_figures.py), or hand-written — once its story and layout decisions are fixed. Validate titles and figures and apply mechanical layout rules without changing content."
 ---
 
 # ppt_create — Slide Renderer Skill
 
 ## Purpose
 
-Convert a `ppt_design` storyboard file (output of skill 5) into a `.pptx` presentation via Pandoc,
+Convert an approved storyboard file into a `.pptx` presentation via Pandoc,
 followed by python-pptx post-processing for section tags, title clearing, font sizes, table styling,
 figure layout adjustments, and 3-column layouts.
 This skill makes **no content decisions** — everything is specified by the storyboard's layout annotations.
@@ -26,13 +26,19 @@ Trigger when prompts include:
 - "create ppt"
 - "export to pptx"
 
+Accepts any storyboard that follows the layout-annotation format below, whatever produced it:
+`5-ppt-design` (story-driven), `5a-ppt-quick-assembly` (fast figure assembly), or a hand-written file.
+A `5a-ppt-quick-assembly` storyboard ships a sibling `*.index.json` holding the already-computed
+slide indices, layouts, aspects and figure paths — use it for Phase 1 detection and Phase 4's
+DATA BLOCK instead of re-deriving them.
+
 ---
 
 ## Parameters
 
 | # | Parameter | Default | Description |
 |---|-----------|---------|-------------|
-| 1 | `STORYBOARD` | Auto-detect: most recent `*_<dd-mm-yyyy>.md` in current dir | Path to ppt_design storyboard file |
+| 1 | `STORYBOARD` | Auto-detect: most recent `*_<dd-mm-yyyy>.md` in current dir | Path to the storyboard file (5-ppt-design, 5a-ppt-quick-assembly, or hand-written) |
 | 2 | `REFERENCE_PPTX` | `reference.pptx` in storyboard directory if exists, else Pandoc default | Custom PowerPoint template |
 | 3 | `OUTPUT` | Same name as storyboard, `.pptx` extension | Output PPTX filename |
 
@@ -155,12 +161,16 @@ Suggested explicit override syntax in storyboard comments:
 - **Key finding one**
 - **Key finding two**
 - **Key finding three**
+
 :::
 ::: {.column width="70%"}
 ![](fig.png){width="100%"}
+
 :::
 ::::
 ```
+
+**Blank line before every closing `:::`/`::::` fence, when it follows a bullet list.** A bare `:::` immediately under a `- bullet` line reads as a list-continuation to markdown auto-formatters (VSCode's built-in formatter, prettier, format-on-save), which indent it — an indented fence closer is no longer at column 1, so Pandoc fails to close the div and silently drops the slide's content (symptom: a near-empty `.pptx`, far smaller than expected, with `[WARNING] Div ... unclosed` from Pandoc). Phase 2 Step D must enforce this when formatting/detecting column syntax.
 
 **Post-processing logic** (runs for all figure-dominant slides regardless of aspect ratio):
 - Text band: top half of slide, below section tag, sized for 1-3 bullets (~1.6").
@@ -308,6 +318,7 @@ Before adding column syntax to a slide, check whether that slide's block already
 - Ensure `---` separators between every slide block.
 - Ensure `<!-- Slide N -->` comment above each slide.
 - Remove processed `<!-- layout: X -->` tags (keep `<!-- section-tag: ... -->` — needed for Phase 4).
+- **Blank-line-before-fence check**: for every line matching `^:::+` (a fence closer), if the immediately preceding non-blank line is a bullet (`- ...`) or list-adjacent, ensure there is a blank line between them — insert one if missing. This also guards against a prior editor pass (VSCode format-on-save, prettier) having already indented a fence closer: strip leading whitespace from any line matching `^\s+:::+` back to column 1. Re-check after Step C, since it can introduce new fence closers.
 
 ### PHASE 3 — Export
 
@@ -362,6 +373,21 @@ Print this list and manually confirm slide_idx 0 = cover, and every SECTION_TAGS
 **`FIGURE_HEIGHT_OVERRIDE`** — optional per-slide override from storyboard explicit request:
 - Key: slide index (0-based). Value: float in `(0, 1]` representing figure region fraction from bottom.
 - If present for a slide, it overrides the default bullet-driven `9/14` to `11/14` rule.
+
+**`STAMP_IDS`** — default `True`. Stamps round-trip identity so `/7-ppt-to-5` can read the deck
+back after manual editing: a role on each semantic shape (`sb:role=section|title|takeaway|figure`),
+a stable `slide=` id on the identity anchor (section chip → cover title → takeaway band), and
+`fid`/`src`/`sha` on every picture — written to both `shape.name` and the alt-text `descr`. Also
+writes `figure_registry.json` (sha256 → source) beside the PPTX. **Metadata only: geometry, fonts,
+and shape counts are byte-identical to `STAMP_IDS = False`.** Set `SLIDE_IDS = {idx: "S004"}` from a
+storyboard's `<!-- slide-id: -->` comments to carry ids across a re-render, and `PROJECT_ROOT` so
+figure sources are stamped project-relative (survives moving the project).
+
+**`BULLET_PLACEHOLDERS`** — default `True`, unchanged behaviour: a figure slide with no bullets still
+gets a 1.6" band filled with `[Bullet 1..3]` placeholders so the author sees where text belongs.
+Set to `False` only for a deliberately bullet-free deck (a `5a-ppt-quick-assembly` figure assembly);
+the empty band then collapses to ~0.06" and its height goes to the figures. Combine with a
+`<!-- figure-height: 13/14 -->` override to use the full slide below the section-tag chip.
 
 #### Static template
 

@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """postprocess_slides.py — fill in DATA BLOCK only; do not edit below the separator."""
 
+import json
+import re
+from pathlib import Path
+
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
@@ -35,6 +39,23 @@ FIGURE_HEIGHT_OVERRIDE = {
     # optional, from explicit storyboard request
     # slide_index: 10/14,
 }
+
+# True (default): a figure slide with no bullets still gets a 1.6" band filled with
+# "[Bullet N]" placeholders, so the author can see where text belongs.
+# False: intentionally bullet-free decks (e.g. /5a-ppt-quick-assembly figure assembly)
+# collapse the empty band instead, freeing its height for the figures.
+BULLET_PLACEHOLDERS = True
+
+# --- round-trip identity (consumed by /7-ppt-roundtrip) ---------------------
+# STAMP_IDS=False reproduces the pre-round-trip output exactly.
+STAMP_IDS = True
+# Stable slide ids carried over from a revised storyboard (<!-- slide-id: S004 -->).
+# Empty => mint S001, S002, ... by position on this render.
+SLIDE_IDS = {
+    # slide_index (0-based): "S004",
+}
+# Absolute project root; figure sources are stamped relative to it when inside.
+PROJECT_ROOT = None
 # ============================================================
 
 COLOR_MAP = {
@@ -205,6 +226,12 @@ def ensure_bullet_placeholder(slide, slide_w):
         for para in tf.paragraphs
         for run in para.runs
     )
+    if not has_user_text and not BULLET_PLACEHOLDERS:
+        tf.clear()
+        bullet_shape.top = int(Inches(0.50))
+        bullet_shape.height = int(Inches(0.06))
+        return bullet_shape
+
     if not has_user_text:
         tf.clear()
         p0 = tf.paragraphs[0]
@@ -377,6 +404,151 @@ def reposition_figure_dominant(slide, fig_path, slide_w, slide_h, slide_idx):
             break
     _resolve_text_picture_overlap(slide, text_shape)
 
+# ============================================================
+# Round-trip identity stamping (additive; no geometry/font/shape-count change)
+# ============================================================
+
+def _sha256_bytes(b):
+    import hashlib
+    return hashlib.sha256(b).hexdigest()
+
+
+def _sha256_file(path):
+    import hashlib
+    try:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except Exception:
+        return None
+
+
+def _rel_source(path):
+    """Project-relative when inside PROJECT_ROOT, else absolute."""
+    p = Path(str(path)).resolve()
+    if PROJECT_ROOT:
+        try:
+            return str(p.relative_to(Path(PROJECT_ROOT).resolve()))
+        except ValueError:
+            pass
+    return str(p)
+
+
+def _figure_id(source, taken):
+    stem = re.sub(r"[^0-9A-Za-z_.-]+", "_", Path(str(source)).stem)[:60] or "fig"
+    fid, n = stem, 1
+    while fid in taken:
+        n += 1
+        fid = f"{stem}_{n}"
+    taken.add(fid)
+    return fid
+
+
+def _set_meta(shape, name, payload):
+    """Write the two stamped copies: shape.name (invisible) + cNvPr@descr (alt text)."""
+    try:
+        shape.name = name
+    except Exception:
+        pass
+    try:
+        cNvPr = shape._element._nvXxPr.cNvPr
+        cNvPr.set("descr", json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+    except Exception:
+        pass
+
+
+def _slide_text_shapes(slide):
+    """All text-bearing shapes, INCLUDING empty ones.
+
+    The takeaway band is empty on a bullet-free deck, but it must still be
+    stamped: the user may type into it in PowerPoint, and an unstamped shape
+    would make that edit invisible to /7-ppt-roundtrip.
+    """
+    return [sh for sh in slide.shapes if sh.has_text_frame]
+
+
+def stamp_identity(slide, idx, registry):
+    """Stamp roles on semantic shapes, the slide id on the identity anchor, and
+    fid/src/sha on every picture. Returns nothing; mutates metadata only."""
+    tag_info = SECTION_TAGS.get(idx)
+    sid = SLIDE_IDS.get(idx) or f"S{idx + 1:03d}"
+
+    # --- roles on text shapes -------------------------------------------------
+    chip = title_ph = takeaway = None
+    tag_text = tag_info[0].strip() if tag_info else None
+    for sh in _slide_text_shapes(slide):
+        txt = sh.text_frame.text.strip()
+        if tag_text and txt == tag_text and chip is None:
+            chip = sh
+        elif sh.is_placeholder and sh.placeholder_format.idx == 0 and txt and title_ph is None:
+            title_ph = sh
+        elif takeaway is None:
+            takeaway = sh          # may be empty — stamped anyway, see above
+    if chip is None and title_ph is None and takeaway is None:
+        # cover-style slide whose title was already consumed above
+        t = slide.shapes.title
+        if t is not None and t.has_text_frame:
+            title_ph = t
+
+    # Identity anchor precedence: section chip -> cover title -> takeaway band.
+    anchor = chip or title_ph or takeaway
+    for sh, role in ((chip, "section"), (title_ph, "title"), (takeaway, "takeaway")):
+        if sh is None:
+            continue
+        payload = {"role": role}
+        name = f"sb:role={role}"
+        if sh is anchor:
+            payload["sid"] = sid
+            name += f"|slide={sid}"
+        _set_meta(sh, name, payload)
+
+    # --- figures --------------------------------------------------------------
+    declared = FIGURES.get(idx)
+    declared = declared if isinstance(declared, list) else ([declared] if declared else [])
+    by_sha = {}
+    for src in declared:
+        h = _sha256_file(src)
+        if h:
+            by_sha.setdefault(h, src)
+
+    taken = {e["figure_id"] for e in registry.values()}
+    for pic in [sh for sh in slide.shapes if sh.shape_type == 13]:
+        try:
+            sha = _sha256_bytes(pic.image.blob)
+        except Exception:
+            continue
+        payload = {"role": "figure", "sha": sha}
+        entry = registry.get(sha)
+        if entry is not None:
+            fid, src_rel = entry["figure_id"], entry["source"]
+        else:
+            src = by_sha.get(sha)
+            src_rel = _rel_source(src) if src else None
+            fid = _figure_id(src_rel or f"unknown_{sha[:8]}", taken)
+            registry[sha] = {"figure_id": fid, "source": src_rel,
+                             "width": None, "height": None}
+            try:
+                registry[sha]["width"], registry[sha]["height"] = pic.image.size
+            except Exception:
+                pass
+        payload["fid"] = fid
+        if src_rel:
+            payload["src"] = src_rel
+        _set_meta(pic, f"sb:role=figure|fid={fid}", payload)
+
+
+def write_figure_registry(registry, pptx_path):
+    """Append-only, project-scoped, keyed by sha256. Fallback resolver only."""
+    out = Path(pptx_path).parent / "figure_registry.json"
+    existing = {}
+    if out.exists():
+        try:
+            existing = json.loads(out.read_text())
+        except Exception:
+            existing = {}
+    existing.update({k: v for k, v in registry.items() if k not in existing})
+    out.write_text(json.dumps(existing, indent=2, ensure_ascii=False) + "\n")
+    return out, len(existing)
+
+
 def main():
     prs     = Presentation(PPTX_PATH)
     slide_w = prs.slide_width
@@ -444,6 +616,13 @@ def main():
             _resolve_text_picture_overlap(slide, bullet_shape)
 
         format_notes_one_sentence_per_line(slide)
+
+    if STAMP_IDS:
+        registry = {}
+        for idx, slide in enumerate(prs.slides):
+            stamp_identity(slide, idx, registry)
+        reg_path, n_reg = write_figure_registry(registry, PPTX_PATH)
+        print(f"Stamped {len(prs.slides)} slides; registry: {reg_path} ({n_reg} figures)")
 
     prs.save(PPTX_PATH)
     print(f"Saved: {PPTX_PATH}")

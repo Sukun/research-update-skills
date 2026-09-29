@@ -10,6 +10,13 @@ Produce a slide-by-slide storyboard markdown file from either:
 
 - **Mode A**: a rough user draft (free-form bullets, spoken description, or section titles)
 - **Mode B**: a pointer to one or more research notes files (reads and proposes a storyboard)
+  - **Default Mode-B source: topic records.** When `<topic>/00_README.md` files exist (made by
+    `4b-topic-record`), read only their `# L1 · Summary` sections. They are already slide-shaped
+    (one `##` per slide, a key figure, ≤ 3 bullets, finding-style titles). This skill's job is then only
+    the **cross-topic story**: which topics, their order, which L1 slides to cut or merge, the cover,
+    outline and summary slides, and section tags. Pull an L2 number or companion figure only when
+    a slide needs it, and cite the L2 section in speaker notes. Read full notes only if no topic record exists.
+  - A single topic needs no storyboard design: `4-mk_quickview/md_to_slides.py 00_README.md --section L1 --render`.
 
 Both modes accepted. The output is a human-readable `.md` storyboard with explicit layout annotations that `6-ppt-create` (skill 6) reads mechanically to produce the final PPTX.
 
@@ -277,9 +284,11 @@ Write storyboards **with Pandoc column syntax** so figures are visible as inline
 ::: {.column}
 - **Key finding 1**
 - **Key finding 2**
+
 :::
 ::: {.column}
 ![](/absolute/path/to/fig.png){width="100%"}
+
 :::
 ::::
 
@@ -297,9 +306,11 @@ Write storyboards **with Pandoc column syntax** so figures are visible as inline
 :::: {.columns}
 ::: {.column}
 ![](/absolute/path/to/fig_a.png){width="100%"}
+
 :::
 ::: {.column}
 ![](/absolute/path/to/fig_b.png){width="100%"}
+
 :::
 ::::
 
@@ -311,6 +322,10 @@ Write storyboards **with Pandoc column syntax** so figures are visible as inline
 **Exception — `hstack-3`**: Pandoc cannot render 3-column natively. Write only the first figure as `![]()` and add a `<!-- figures: a, b, c -->` comment; 6-ppt-create's Phase 4D handles it via python-pptx. Do NOT write column syntax for hstack-3.
 
 6-ppt-create Phase 2 detects pre-formatted storyboards (column syntax already present) and skips re-adding it.
+
+### Blank line before every closing `:::`/`::::` fence — CRITICAL RULE
+
+**Always leave one blank line between the last content line (bullet or image) inside a fenced div and its closing fence.** Without it, a bare `:::` immediately below a `- bullet` line reads as a list-continuation line to markdown auto-formatters (VSCode's built-in formatter, prettier, format-on-save). They indent it to align with the list item — and an indented `:::` is no longer at column 1, so Pandoc silently fails to close the div. The visible symptom is a near-empty `.pptx` (tens of KB instead of the expected MB-scale file with images), with `[WARNING] Div ... unclosed` from Pandoc on export. This has broken a real storyboard after an editor reformat — treat the blank line as mandatory, not cosmetic, on every `:::`/`::::` closer that follows a bullet list.
 
 ### Note: blocks
 
@@ -360,6 +375,7 @@ Write storyboards **with Pandoc column syntax** so figures are visible as inline
 
 **If Mode B (notes file provided):**
 
+0. If the sources are topic records, extract their `# L1` sections first and apply the line-count check to those sections, not the whole files.
 1. Check line count: `wc -l <notes_file>`. If > 150 lines, ask the user: "Notes file is ~N lines — read in full to construct the storyboard? (yes / no — paste a summary instead)". Proceed only on yes.
 2. Read the specified notes file(s).
 3. Identify key findings, figure references, and thematic groupings.

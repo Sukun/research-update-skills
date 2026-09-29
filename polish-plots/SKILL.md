@@ -113,6 +113,21 @@ Never call `plt.savefig()` directly in new scripts — it bypasses the shared DP
 The `plot_contourf()` and `plot_map_field()` helpers auto-select these. Do not
 introduce cmocean, cmcrameri, or other colormap packages as required imports.
 
+### Rule 6a — Compare colour configurations when the data occupy a narrow range
+
+When a user reports that a heatmap or other continuous field does not separate
+the values that matter, render a labelled temporary comparison figure before
+changing the production figure. Keep data, annotations, panel geometry and
+metric definitions fixed; vary only the colormap and normalization.
+
+Include the current encoding and a focused linear-range option as the minimum
+comparison. Add only alternatives relevant to the data: a CVD-safe sequential
+map, discrete thresholds where thresholds are meaningful, a nonlinear norm
+that retains a required full semantic range, or a diverging map centred on a
+meaningful reference value. Label the exact limits or boundaries on each
+option. The user selects an option; then apply it to the existing production
+layout rather than carrying the temporary comparison layout into the paper.
+
 ### Rule 7 — Use the Wong color palette for line plots
 
 The shared mplstyle files set the `axes.prop_cycle` to the Wong (2011)
@@ -199,6 +214,7 @@ Check each rule in order:
 | 4 | No inline font sizes | Remove `fontsize=` kwargs from `set_xlabel`, `set_ylabel`, `set_title`, `legend()`, `suptitle()`. Font hierarchy: `figure.titlesize` (24pt, suptitle) > `axes.titlesize` (20pt, panel titles) — enforced by the mplstyle, never override inline |
 | 5 | Use `save_fig()` | Replace `plt.savefig(...)` with `save_fig(fig, path)` |
 | 6 | Standard colormaps | Use `RdBu_r` / `viridis` / `Reds`; no cmocean or cmcrameri in new shared code |
+| 6a | Narrow-range review | When contrast is insufficient, compare labelled normalizations before committing the selected option |
 | 7 | Wong colour cycle | Remove any `axes.prop_cycle` override |
 | 8 | Shared colorbar helpers | Replace `plt.colorbar(...)` with `add_colorbar(im, ax, label=...)` or `add_shared_colorbar(...)` |
 | 9 | No one-off style blocks | If a style need is genuinely missing, add it to the shared module; do not patch the local script |

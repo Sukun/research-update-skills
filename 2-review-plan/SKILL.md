@@ -34,12 +34,13 @@ Skip it for routine code changes, replications, and established-pipeline extensi
 
 ## Output
 
-Report:
+Lead with the verdict — do not make the user read supporting material to find it.
 
-- verdict, confidence, and one-sentence rationale;
-- blocking issues with required changes and evidence needed;
-- non-blocking suggestions, clearly labelled optional;
-- checks performed and checks skipped as not applicable;
-- open questions that can change the verdict.
+1. **Verdict line first**: verdict, confidence, one-sentence rationale.
+2. **Blockers as decisions, not findings**: for each blocking issue, state the conflict in one line, then a recommended resolution the user can approve with a single "同意/agreed" — not just a description of the problem. If a blocker has no concrete fix yet, say so explicitly rather than listing it as prose.
+3. Skip or compress everything else by default: checks performed/skipped and non-blocking suggestions are audit trail, not decisions — keep each to a single compact line (or a short list), and never let them outrank the blockers in length or position. Do not pad the response with them.
+4. Open questions that can flip the verdict — only if they change what the user needs to decide right now.
 
 Do not write code, run experiments, fabricate results, modify the contract, or add mandatory baseline, validation, documentation, or interpretation tasks when they are irrelevant to the stated claim.
+
+Once the user approves the recommended resolutions, restate the verdict as updated (e.g. REJECT_FOR_NOW → ACCEPT) in one line — do not require a second review pass to reflect an approval already given.

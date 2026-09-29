@@ -12,7 +12,8 @@ import matplotlib.pyplot as plt
 
 
 def add_colorbar(mappable, ax, label='', shrink=0.9, pad=0.02,
-                 extend='both', orientation='vertical', labelpad=4, **kwargs):
+                 extend='both', orientation='vertical', labelpad=4, cax=None,
+                 **kwargs):
     """Add a standard vertical colorbar next to a single axes.
 
     Parameters
@@ -33,18 +34,20 @@ def add_colorbar(mappable, ax, label='', shrink=0.9, pad=0.02,
         'vertical' (default) or 'horizontal'.
     labelpad : float
         Distance in points between tick labels and colorbar label. Default 4.
+    cax : Axes, optional
+        Pre-positioned axes for a colourbar. Use for a fixed, approved figure
+        layout that cannot use the standard adjacent placement.
 
     Returns
     -------
     Colorbar
     """
     fig = ax.get_figure()
-    cb = fig.colorbar(
-        mappable, ax=ax,
-        shrink=shrink, pad=pad,
-        extend=extend, orientation=orientation,
-        **kwargs,
-    )
+    colorbar_args = dict(extend=extend, orientation=orientation, **kwargs)
+    if cax is None:
+        cb = fig.colorbar(mappable, ax=ax, shrink=shrink, pad=pad, **colorbar_args)
+    else:
+        cb = fig.colorbar(mappable, cax=cax, **colorbar_args)
     if label:
         cb.set_label(label, labelpad=labelpad)
     return cb
