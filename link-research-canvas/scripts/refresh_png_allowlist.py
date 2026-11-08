@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+"""Refresh documentation PNG exceptions using only the Python standard library."""
+import argparse
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+from urllib.parse import unquote, urlsplit
+
+ROOT = Path(__file__).resolve().parent.parent
+BEGIN = '# BEGIN GENERATED PNG ALLOWLIST'
+END = '# END GENERATED PNG ALLOWLIST'
+
+
+def git(*args):
+    return subprocess.check_output(['git', '-C', str(ROOT)] + list(args))
+
+
+def markdown_targets(text):
+    # Ignore examples, comments and inline code; preserve ordinary links/embeds.
+    text = re.sub(r'<!--.*?-->', '', text, flags=re.S)
+    text = re.sub(r'^ {0,3}(`{3,}|~{3,})[^\n]*\n.*?^ {0,3}\1[^\n]*(?:\n|$)',
+                  '', text, flags=re.M | re.S)
+    text = re.sub(r'(`+)[^\n]*?\1', '', text)
+    for match in re.finditer(r'!?\[\[([^\]\n]+)\]\]', text):
+        yield match.group(1).split('|', 1)[0]
+    # Parse balanced parentheses (e.g. smoother_(gamma=0.7).png).
+    for match in re.finditer(r'!?\[[^\]\n]*\]\(\s*', text):
+        start = match.end()
+        if text[start:start + 1] == '<':
+            end = text.find('>', start + 1)
+            if end != -1:
+                yield text[start + 1:end]
+            continue
+        depth, pos = 0, start
+        while pos < len(text):
+            char = text[pos]
+            if char == '\\':
+                pos += 2
+                continue
+            if char == '(':
+                depth += 1
+            elif char == ')':
+                if depth == 0:
+                    break
+                depth -= 1
+            elif char.isspace() and depth == 0:
+                break
+            pos += 1
+        yield text[start:pos]
+    # Reference-style definitions and HTML images are explicit references too.
+    for match in re.finditer(r'^ {0,3}\[[^\]\n]+\]:\s*(?:<([^>]+)>|(\S+))', text, re.M):
+        yield match.group(1) or match.group(2)
+    for match in re.finditer(r'<img\b[^>]*\bsrc=[\"\']([^\"\']+)[\"\']', text, re.I):
+        yield match.group(1)
+
+
+def collect(sources):
+    paths, missing = set(), set()
+    for name in sources:
+        source = ROOT / name
+        source.resolve().relative_to(ROOT)
+        text = source.read_text(encoding='utf-8')
+        if source.suffix == '.canvas':
+            targets = [node['file'] for node in json.loads(text)['nodes']
+                       if node.get('type') == 'file']
+        elif source.suffix.lower() == '.md':
+            targets = markdown_targets(text)
+        else:
+            raise ValueError('Unsupported source: ' + name)
+        for target in targets:
+            target = re.sub(r'\\([\\`*{}\[\]()#+.!_<> -])', r'\1', target)
+            url = urlsplit(target)
+            if url.scheme or url.netloc:
+                continue
+            decoded = unquote(url.path)
+            if Path(decoded).suffix.lower() != '.png':
+                continue
+            candidate = ((ROOT / decoded.lstrip('/')) if decoded.startswith('/')
+                         else source.parent / decoded).resolve()
+            try:
+                relative = candidate.relative_to(ROOT).as_posix()
+            except ValueError:
+                raise ValueError('PNG outside repository: {}: {}'.format(name, target))
+            if '\n' in relative or '\r' in relative:
+                raise ValueError('Newline in PNG path: ' + repr(relative))
+            if not candidate.is_file():
+                missing.add('{} -> {}'.format(name, relative))
+            paths.add(relative)
+    return paths, missing
+
+
+def escape_pattern(path):
+    return ''.join('\\' + c if c in '\\*?[]!# ' else c for c in path)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--write', action='store_true', help='update generated .gitignore block')
+    parser.add_argument('--sync-index', action='store_true',
+                        help='with --write: stage referenced PNGs and untrack removed references')
+    args = parser.parse_args()
+    if args.sync_index and not args.write:
+        parser.error('--sync-index requires --write')
+    sources = json.loads((ROOT / 'tools/png_sources.json').read_text(encoding='utf-8'))
+    if not isinstance(sources, list) or not sources:
+        raise ValueError('png_sources.json must be a nonempty list of source paths')
+    paths, missing = collect(sources)
+    ignore = ROOT / '.gitignore'
+    original = ignore.read_text(encoding='utf-8')
+    if original.count(BEGIN) != 1 or original.count(END) != 1:
+        raise ValueError('Expected exactly one generated block in .gitignore')
+    before, tail = original.split(BEGIN, 1)
+    old_block, after = tail.split(END, 1)
+    # The generated format uses backslash escaping for Git pattern characters.
+    old = {re.sub(r'\\(.)', r'\1', line[2:]) for line in old_block.splitlines()
+           if line.startswith('!/')}
+    block = '\n# Generated by tools/refresh_png_allowlist.py; edit tools/png_sources.json.\n'
+    block += '\n'.join('!/' + escape_pattern(p) for p in sorted(paths)) + '\n'
+    updated = before + BEGIN + block + END + after
+    tracked = {p for p in git('ls-files', '-z').decode('utf-8').split('\0')
+               if p.lower().endswith('.png')}
+    added, removed = paths - old, old - paths
+    untrack = tracked - paths
+    untracked = paths - tracked
+    changed = updated != original
+    print('Sources: {}; PNGs: {}; allowlist +{} / -{}'.format(
+        len(sources), len(paths), len(added), len(removed)))
+    print('Index: {} new PNGs; {} unreferenced PNGs to untrack'.format(
+        len(untracked), len(untrack)))
+    for label, values in [('ADD', added), ('REMOVE', removed), ('UNTRACK', untrack),
+                          ('MISSING', missing)]:
+        for value in sorted(values):
+            print('{} {}'.format(label, value))
+    if missing:
+        print('Missing images: no files or index entries changed.', file=sys.stderr)
+        return 2
+    if args.write:
+        if changed:
+            ignore.write_text(updated, encoding='utf-8')
+        if args.sync_index:
+            # Literal pathspecs prevent filenames containing [] or * becoming globs.
+            # No -f: refuse to discard conflicting staged image content.
+            for path in sorted(untrack):
+                git('--literal-pathspecs', 'rm', '--cached', '--', path)
+            # Stage updates to existing referenced images as well as new images.
+            for path in sorted(paths):
+                git('--literal-pathspecs', 'add', '--', path)
+        print('Allowlist refreshed.' if changed else 'Allowlist already current.')
+        return 0
+    print('CHECK ONLY. Use --write to refresh; --write --sync-index to stage PNG changes.')
+    return 1 if changed or untracked or untrack else 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        print('ERROR: {}'.format(error), file=sys.stderr)
+        sys.exit(2)

@@ -1,6 +1,6 @@
 ---
 name: 4b-topic-record
-description: "Summarise accumulated notes, quickviews and reports on ONE research topic into a single ppt-style markdown record — <topic>/00_README.md with L1 summary slides (key figure + 2 lines each), L2 skippable evidence, L3 dated log, and a source-notes table — and number the topic's notes in plan → results order. Use when the user says topic record, summarise this topic, organise this topic folder, consolidate these notes, or wants to pick a topic back up after weeks. Figures are linked, never copied, so regenerated plots update automatically. Not for a single run's figures (use 4-mk_quickview), manuscripts (use 4-report), or multi-topic decks (use 5-ppt-design, which reads these records' L1)."
+description: "Summarise accumulated notes, quickviews and reports on ONE research topic into a single ppt-style markdown record — <topic>/00_README.md with L1 summary slides (key figure + 2 lines each), L2 skippable evidence, L3 dated log, and a source-notes table — and number the topic's notes in plan → results order. Project mode: one cross-topic progress page (STATUS.md) from the records' L1. Use when the user says topic record, summarise this topic, organise this topic folder, consolidate these notes, or wants to pick a topic back up after weeks. Figures are linked, never copied, so regenerated plots update automatically. Not for a single run's figures (use 4-mk_quickview), manuscripts (use 4-report), or multi-topic decks (use 5-ppt-design, which reads these records' L1)."
 ---
 
 # Topic Record
@@ -131,6 +131,9 @@ Rules for L1 (it must render cleanly with `4-mk_quickview/md_to_slides.py --sect
 1. **Inventory (read-only).** List the topic folder's files (size, mtime, symlink targets) and grep
    the repo for references to each filename, including code comments, other docs, `contracts/` and
    run records. Read every note in full.
+   **Staleness check:** list decisions, definition changes and data reprocessing dated after each
+   figure or number (FINDINGS, STATUS, run records, git log). Tag affected items **[stale]** with the
+   reason; never fix them here.
 2. **Propose the rename table** (old → new, plan → results by date) and show which files
    reference each old name. Ask for approval before touching anything, unless the user already
    approved the renames for this folder.
@@ -149,6 +152,18 @@ Rules for L1 (it must render cleanly with `4-mk_quickview/md_to_slides.py --sect
    `docs/README.md`).
 7. **Report:** record path, rename table, alias symlinks created, references updated, references
    deliberately left (and why), conflicts and stale items found.
+
+## Project mode
+
+Trigger: "project progress", "overview of all topics". Refresh each topic record first, then write
+one page (the project's `STATUS.md` unless the user names another path) built **only from the
+records' L1 and the staleness check**:
+
+- Header: date, one-line current stage, current definitions/windows table.
+- Per topic, one block: link to its record, 1 key figure + caption, then four one-line bullets —
+  **Done**, **Finding**, **Problem** (incl. [stale] items), **Next**.
+- Then one table of open decisions/next work across topics (ID, task, status, dependency).
+- No L2 detail, no new interpretation. Listing work does not authorize it.
 
 ## Safety
 
