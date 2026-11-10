@@ -1,6 +1,6 @@
 ---
 name: 00-init-project-structure
-description: Initialize or lightly organize documentation for an existing project. Preserve numeric document naming, reuse existing notes, and provide a concise project roadmap without duplicating information.
+description: Initialize or lightly organize documentation for an existing project, including research outlines, overviews, and roadmaps. Preserve numeric document naming, reuse existing notes, and improve navigation and evidence traceability without duplicating information or adding scientific interpretation.
 ---
 
 # Initialize and Organize a Project
@@ -125,9 +125,13 @@ Recommended structure:
 
     Last reviewed: YYYY-MM-DD
 
-    ## Project Goal
+    ## Quick View
 
-    One or two sentences describing the overall objective.
+    - Goal and key question:
+    - Current progress:
+    - Main documented finding, if available: [Evidence](...)
+    - Blocker or open decision:
+    - Next action: [Existing task or plan](...)
 
     ## Research / Work Areas
 
@@ -165,11 +169,12 @@ For a new overview, prefer:
 
     Last updated: YYYY-MM-DD
 
-    ## Summary
+    ## Quick View
 
     - Purpose:
+    - Key question:
     - Current progress:
-    - Main finding or outcome:
+    - Main documented finding or outcome: [Evidence](...)
     - Open problem:
     - Next step:
 
@@ -186,6 +191,78 @@ Keep the first section short.
 The supporting detail may be extensive when the subject requires it, but do not duplicate material already maintained elsewhere.
 
 An existing L1/L2/L3 research topic record can serve as the area overview. Do not replace it with another format.
+
+### Research Overview Content Guidelines
+
+Apply these guidelines when creating or revising research outlines, roadmaps, summaries, project overviews, or Markdown knowledge bases within the authorized scope. Existing names such as `outline.md` and `roadmap.md` do not require renaming.
+
+**Structure for quick reading**
+
+- Lead with a short Quick View: research goal, key questions, current progress, major documented findings, and blockers or open decisions. Include only fields supported by available records; do not invent findings to fill a template.
+- Put supporting detail after the overview. Preserve useful detail and scientific meaning rather than shortening solely to meet a length target.
+- Use `#` for the document, `##` for topics, and `###` for subtopics in new ordinary Markdown overviews. Preserve useful established formats, including L1/L2/L3 topic records.
+- Keep paragraphs and bullets focused on one main idea; avoid deep nesting. Use bold selectively for important findings, decisions, risks, and actions.
+- Add a compact plain-text concept map when relationships would otherwise be difficult to follow. It should clarify documented relationships, not imply untested causal links. For example:
+
+    Research question
+    ├── Data → Method → Diagnostic
+    ├── Validation → Supporting records
+    └── Open question → Next action
+
+**Evidence and uncertainty**
+
+Use consistent evidence labels where they clarify the status of a claim:
+
+| Label | Meaning |
+|-------|---------|
+| Confirmed | Supported by verified evidence within the stated conditions; identify the supporting validation record. |
+| Reported | Described in existing records; not independently verified in this documentation task. |
+| Hypothesis | Proposed but untested explanation or prediction. |
+| Open | Unresolved question or decision. |
+| Needs verification | A specific claim, source, or reference still requires checking. |
+
+- Preserve established labels when their meanings are clear. Keep evidence labels separate from progress states such as planned, running, or completed.
+- Distinguish observations, recorded interpretations, assumptions, and next actions. Attribute existing interpretations to their source; do not add new scientific interpretation.
+- A completed experiment is not automatically a validated finding. An accessible file or working link does not establish scientific validity.
+- Preserve uncertainty, contradictory evidence, experimental conditions, and validation limits. Mark historical or superseded results clearly when the records establish that status.
+
+**Topic structure and terminology**
+
+For each topic, include whichever elements help the reader; they need not become six separate headings:
+
+    Research Topic
+    ├── Purpose      — What question does it address?
+    ├── Method       — How is it investigated?
+    ├── Finding      — What has been observed, under which conditions?
+    ├── Limitation   — What remains uncertain?
+    ├── Evidence     — Where are the supporting records?
+    └── Next Action  — What should happen next?
+
+- Briefly explain technical concepts at first use; add a compact glossary only for frequently reused terms that need it.
+- Use consistent mathematical notation, preferably LaTeX when supported. Define variables, units, and indices when introduced. Qualify symbols used for different concepts.
+- Do not infer missing definitions or units. Flag them explicitly and replace ambiguous placeholders such as `Method (?)` with a specific unresolved question.
+
+**Links, results, and figures**
+
+- Give important scientific claims descriptive links to their supporting records, preferably to a specific section. Convert navigation labels such as `[Project Goal]` into working links when the destination is known; otherwise mark the missing destination explicitly.
+- Use reference-style links when repeated citations would clutter the text. Keep one authoritative detailed record and link to it.
+- Check links and anchors introduced or changed by the task where the environment permits. Report inaccessible destinations or version conflicts; do not expand this into an unrequested project-wide audit.
+- Lead result entries with the documented finding and its uncertainty, rather than the figure filename. Separate experimental configuration, observation, and recorded interpretation into distinct statements.
+- Include only essential existing figures in an overview; link to detailed figure inventories, experiment logs, and reports. Do not generate figures or new analysis.
+
+**Outline versus roadmap**
+
+| Aspect | Research outline | Research roadmap |
+|--------|------------------|------------------|
+| Main question | What is being studied? | What should happen next? |
+| Organization | Scientific concepts and relationships | Phases, priorities, and dependencies |
+| Emphasis | Questions, methods, documented findings, and evidence | Tasks, progress, and documented decision gates |
+| Navigation | Topics → detailed records | Milestones → existing tasks or plans |
+| Maintenance | When research understanding changes | When plans or progress change |
+
+An outline may contain detailed topic structure; a roadmap should stay a short navigation page. Link to existing owners, deadlines, dependencies, and decision criteria when recorded and useful; do not invent commitments. Listing a next action does not authorize its execution.
+
+Use **Quick View → Concept Map (when useful) → Structured Topics → Evidence and Open Questions** as a flexible reading order. Keep key findings in the Quick View or their owning topic rather than repeating them in another mandatory section.
 
 ## 6. Tasks, Decisions, and Historical Records
 
@@ -257,6 +334,7 @@ Do not rewrite historical run records.
 For a larger authorized reorganization, present a concise old-path to new-path mapping before moving files.
 
 Keep unrelated files unchanged.
+
 
 ## 10. Completion and Reporting
 

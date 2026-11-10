@@ -56,6 +56,11 @@ SLIDE_IDS = {
 }
 # Absolute project root; figure sources are stamped relative to it when inside.
 PROJECT_ROOT = None
+# Opt-in geometry, keyed by stable slide ID (or legacy zero-based index).
+# margin, gap and content_top are inches; text_fraction is a slide-width fraction.
+LAYOUT_OPTIONS = {}
+# Keep authored Notes XML unchanged by default.
+REFORMAT_NOTES = False
 # ============================================================
 
 COLOR_MAP = {
@@ -70,12 +75,37 @@ def get_aspect(path, fallback=1.6):
     if Image is None or path is None:
         return fallback
     try:
-        w, h = Image.open(path).size
+        with Image.open(path) as image:
+            w, h = image.size
         return w / h
     except Exception:
         return fallback
 
+def shape_role(shape):
+    try:
+        payload = json.loads(shape._element._nvXxPr.cNvPr.get("descr", "{}"))
+        if payload.get("role"):
+            return payload["role"]
+    except (ValueError, AttributeError, TypeError):
+        pass
+    match = re.search(r"sb:role=([^|]+)", shape.name or "")
+    return match.group(1) if match else None
+
+
+def body_text_shapes(slide):
+    title = slide.shapes.title
+    title_id = title.shape_id if title is not None else None
+    return [sh for sh in slide.shapes if sh.has_text_frame
+            and sh.shape_id != title_id and shape_role(sh) != "section"
+            and sh.text_frame.text.strip()]
+
+
 def add_section_tag(slide, tag_text, color_name, slide_w):
+    for shape in slide.shapes:
+        if shape_role(shape) == "section":
+            if shape.text != tag_text:
+                shape.text = tag_text
+            return shape
     rgb = COLOR_MAP.get(color_name, (70, 130, 180))
     box = slide.shapes.add_textbox(Inches(0.08), Inches(0.05), int(slide_w * 0.70), Inches(0.36))
     tf  = box.text_frame
@@ -89,6 +119,8 @@ def add_section_tag(slide, tag_text, color_name, slide_w):
     box.fill.fore_color.rgb = RGBColor(*rgb)
     tf.margin_left = tf.margin_right = Inches(0.06)
     tf.margin_top  = tf.margin_bottom = Inches(0.02)
+    _set_meta(box, "sb:role=section", {"role": "section"})
+    return box
 
 def clear_title(slide):
     title = slide.shapes.title
@@ -165,7 +197,7 @@ def format_notes_one_sentence_per_line(slide):
 def set_body_font(slide):
     title_id = slide.shapes.title.shape_id if slide.shapes.title else -1
     for shape in slide.shapes:
-        if shape.shape_id == title_id:
+        if shape.shape_id == title_id or shape_role(shape) == "section":
             continue
         _set_text_shape_font(shape, 20)
 
@@ -211,6 +243,12 @@ def ensure_bullet_placeholder(slide, slide_w):
             break
 
     if bullet_shape is None:
+        authored = body_text_shapes(slide)
+        if authored:
+            bullet_shape = authored[0]
+            bullet_shape.left, bullet_shape.top = band_left, band_top
+            bullet_shape.width, bullet_shape.height = band_width, band_height
+    if bullet_shape is None:
         bullet_shape = slide.shapes.add_textbox(band_left, band_top, band_width, band_height)
     else:
         bullet_shape.left = band_left
@@ -221,11 +259,7 @@ def ensure_bullet_placeholder(slide, slide_w):
     tf = bullet_shape.text_frame
     tf.word_wrap = True
 
-    has_user_text = any(
-        run.text.strip()
-        for para in tf.paragraphs
-        for run in para.runs
-    )
+    has_user_text = bool(tf.text.strip())
     if not has_user_text and not BULLET_PLACEHOLDERS:
         tf.clear()
         bullet_shape.top = int(Inches(0.50))
@@ -301,6 +335,8 @@ def _fit_pictures_to_bottom_region(slide, slide_idx, slide_w, slide_h, text_shap
         shp.top = int(target_top + rel_y * scale)
         shp.width = int(max(int(shp.width * scale), 1))
         shp.height = int(max(int(shp.height * scale), 1))
+        # Pandoc may round each dimension independently; restore source proportion.
+        fit_picture(shp, shp.left, shp.top, shp.width, shp.height)
 
 def style_table(slide, shape, slide_idx, slide_w, slide_h, has_bullets):
     tbl    = shape.table
@@ -345,44 +381,50 @@ def style_table(slide, shape, slide_idx, slide_w, slide_h, has_bullets):
                     run.font.size = Pt(16)
                     run.font.bold = (row_idx == 0)
 
+def _prepare_rebuild_pictures(slide, paths):
+    """Reuse matching pictures to retain crops/metadata; replace only unmatched pictures."""
+    if len(paths) != 3 or any(not path or not Path(path).is_file() for path in paths):
+        raise ValueError("Three-picture layouts require three existing local figures")
+    existing = [shape for shape in slide.shapes if shape.shape_type == 13]
+    unused = list(existing)
+    selected = []
+    for path in paths:
+        sha = _sha256_file(path)
+        picture = next((pic for pic in unused if _sha256_bytes(pic.image.blob) == sha), None)
+        if picture is not None:
+            unused.remove(picture)
+        else:
+            picture = slide.shapes.add_picture(str(path), 0, 0)
+        selected.append(picture)
+    for pic in unused:
+        pic._element.getparent().remove(pic._element)
+    return selected
+
+
 def rebuild_vstack3(slide, fig_paths, tag_info, slide_w, slide_h, slide_idx):
-    sp_tree = slide.shapes._spTree
-    for shape in list(slide.shapes):
-        sp_tree.remove(shape._element)
-    margin_side = Inches(0.15)
-    max_w       = slide_w - 2 * margin_side
+    pictures = _prepare_rebuild_pictures(slide, fig_paths)
     if tag_info:
+        clear_title(slide)
         add_section_tag(slide, tag_info[0], tag_info[1], slide_w)
     text_shape = ensure_bullet_placeholder(slide, slide_w)
-    fig_top_min, avail_h = _figure_region_geometry(slide_idx, slide_h, text_shape)
-    row_h = avail_h / 3
-    for i, path in enumerate(fig_paths):
-        aspect = get_aspect(path)
-        img_w  = min(max_w, row_h * aspect)
-        img_h  = img_w / aspect
-        left   = margin_side + (max_w - img_w) / 2
-        top    = fig_top_min + i * row_h + (row_h - img_h) / 2
-        slide.shapes.add_picture(str(path), int(left), int(top), int(img_w), int(img_h))
+    top, height = _figure_region_geometry(slide_idx, slide_h, text_shape)
+    margin = int(Inches(0.15))
+    for i, pic in enumerate(pictures):
+        fit_picture(pic, margin, top+i*height/3, slide_w-2*margin, height/3)
     _resolve_text_picture_overlap(slide, text_shape)
 
+
 def rebuild_hstack3(slide, fig_paths, tag_info, slide_w, slide_h, slide_idx):
-    sp_tree = slide.shapes._spTree
-    for shape in list(slide.shapes):
-        sp_tree.remove(shape._element)
-    margin      = Inches(0.08)
-    col_w       = (slide_w - 2 * margin) / 3
+    pictures = _prepare_rebuild_pictures(slide, fig_paths)
     if tag_info:
+        clear_title(slide)
         add_section_tag(slide, tag_info[0], tag_info[1], slide_w)
     text_shape = ensure_bullet_placeholder(slide, slide_w)
-    fig_top_min, avail_h = _figure_region_geometry(slide_idx, slide_h, text_shape)
-    for i, path in enumerate(fig_paths):
-        aspect      = get_aspect(path)
-        img_h       = min(col_w / aspect, avail_h)
-        img_w       = img_h * aspect
-        vert_offset = (avail_h - img_h) / 2
-        top         = fig_top_min + vert_offset
-        left        = margin + i * col_w + (col_w - img_w) / 2
-        slide.shapes.add_picture(str(path), int(left), int(top), int(img_w), int(img_h))
+    top, height = _figure_region_geometry(slide_idx, slide_h, text_shape)
+    margin = int(Inches(0.08))
+    width = (slide_w-2*margin)/3
+    for i, pic in enumerate(pictures):
+        fit_picture(pic, margin+i*width, top, width, height)
     _resolve_text_picture_overlap(slide, text_shape)
 
 def reposition_figure_dominant(slide, fig_path, slide_w, slide_h, slide_idx):
@@ -401,6 +443,7 @@ def reposition_figure_dominant(slide, fig_path, slide_w, slide_h, slide_idx):
             shape.top    = fig_top
             shape.width  = img_w
             shape.height = img_h
+            fit_picture(shape, shape.left, shape.top, shape.width, shape.height)
             break
     _resolve_text_picture_overlap(slide, text_shape)
 
@@ -469,7 +512,15 @@ def stamp_identity(slide, idx, registry):
     """Stamp roles on semantic shapes, the slide id on the identity anchor, and
     fid/src/sha on every picture. Returns nothing; mutates metadata only."""
     tag_info = SECTION_TAGS.get(idx)
-    sid = SLIDE_IDS.get(idx) or f"S{idx + 1:03d}"
+    prior_ids = []
+    for shape in slide.shapes:
+        try:
+            prior = json.loads(shape._element._nvXxPr.cNvPr.get("descr", "{}"))
+            if prior.get("sid"):
+                prior_ids.append(prior["sid"])
+        except (ValueError, TypeError, AttributeError):
+            pass
+    sid = SLIDE_IDS.get(idx) or (prior_ids[0] if prior_ids else f"S{idx + 1:03d}")
 
     # --- roles on text shapes -------------------------------------------------
     chip = title_ph = takeaway = None
@@ -521,7 +572,12 @@ def stamp_identity(slide, idx, registry):
             fid, src_rel = entry["figure_id"], entry["source"]
         else:
             src = by_sha.get(sha)
-            src_rel = _rel_source(src) if src else None
+            prior = {}
+            try:
+                prior = json.loads(pic._element._nvXxPr.cNvPr.get("descr", "{}"))
+            except (ValueError, TypeError, AttributeError):
+                pass
+            src_rel = _rel_source(src) if src else (prior.get("src") if prior.get("sha") == sha else None)
             fid = _figure_id(src_rel or f"unknown_{sha[:8]}", taken)
             registry[sha] = {"figure_id": fid, "source": src_rel,
                              "width": None, "height": None}
@@ -549,25 +605,198 @@ def write_figure_registry(registry, pptx_path):
     return out, len(existing)
 
 
+BALANCED_LAYOUTS = ("figure-right-text-left", "figure-pair-right-text-left",
+                    "vertical-balanced-text", "large-text-summary")
+
+
+def _options(idx):
+    return LAYOUT_OPTIONS.get(SLIDE_IDS.get(idx), LAYOUT_OPTIONS.get(idx, {}))
+
+
+def validate_layout_options(prs):
+    import math
+    allowed = {"margin", "gap", "content_top", "text_fraction", "font_pt"}
+    valid_keys = set(range(len(prs.slides))) | set(SLIDE_IDS.values())
+    for key, options in LAYOUT_OPTIONS.items():
+        if key not in valid_keys:
+            raise ValueError("Unknown slide for layout options: " + str(key))
+        if set(options) - allowed:
+            raise ValueError("Unknown layout options: " + str(set(options) - allowed))
+        for name, value in options.items():
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                raise ValueError("Layout option must be finite: " + name)
+            low, high = ((0.25, 0.35) if name == "text_fraction" else
+                         (16, 44) if name == "font_pt" else
+                         (0, 1.5) if name == "margin" else
+                         (0.02, 1) if name == "gap" else (0.48, 3))
+            if not low <= value <= high:
+                raise ValueError("Layout option out of range: " + name)
+    for idx, value in FIGURE_HEIGHT_OVERRIDE.items():
+        if idx not in range(len(prs.slides)) or not math.isfinite(float(value)) or not 0 < value <= 1:
+            raise ValueError("Invalid figure-height override")
+
+
+def _set_box(shape, left, top, width, height):
+    if width <= 0 or height <= 0:
+        raise ValueError("No space for slide content")
+    shape.left, shape.top = int(left), int(top)
+    shape.width, shape.height = int(width), int(height)
+
+
+def fit_picture(pic, left, top, width, height):
+    # Existing crops are preserved. New crops are never inferred.
+    w, h = pic.image.size
+    aspect = (w * (1 - pic.crop_left - pic.crop_right) /
+              (h * (1 - pic.crop_top - pic.crop_bottom)))
+    out_w = min(width, height * aspect)
+    out_h = out_w / aspect
+    _set_box(pic, left + (width - out_w) / 2, top + (height - out_h) / 2, out_w, out_h)
+
+
+def _estimated_text_height(shape, width, font_pt=20):
+    # Conservative geometry heuristic, not a substitute for office rendering.
+    import math
+    chars_per_line = max((width / 914400 * 72 / font_pt) / 0.55, 1)
+    lines = 0
+    for para in shape.text_frame.paragraphs:
+        if para.text.strip():
+            sizes = [r.font.size.pt for r in para.runs if r.font.size]
+            factor = max(sizes + [font_pt]) / font_pt
+            lines += max(1, math.ceil(len(para.text) * factor / chars_per_line))
+    return int(Pt(lines * font_pt * 1.35) + shape.text_frame.margin_top + shape.text_frame.margin_bottom)
+
+
+def _place_text_group(shapes, left, top, width, height, font_pt, sid):
+    if not shapes:
+        return
+    heights = [_estimated_text_height(sh, width, font_pt) for sh in shapes]
+    gap = int(Inches(0.10))
+    total = sum(heights) + gap * (len(shapes) - 1)
+    if total > height:
+        print("QA WARNING {}: text may overflow; enlarge the region or revise the storyboard.".format(sid))
+        # Keep boxes inside the text region; do not move them over figures.
+        heights = [max(1, int(h * max(height - gap * (len(shapes)-1), 1) / sum(heights))) for h in heights]
+        total = sum(heights) + gap * (len(shapes)-1)
+    cursor = top + max((height - total) / 2, 0)
+    for sh, h in zip(shapes, heights):
+        _set_box(sh, left, cursor, width, h)
+        sh.text_frame.word_wrap = True
+        cursor += h + gap
+
+
+def apply_balanced_layout(slide, idx, layout, slide_w, slide_h):
+    from pptx.enum.text import MSO_ANCHOR
+    options = _options(idx)
+    margin = int(Inches(options.get("margin", 0.30)))
+    gap = int(Inches(options.get("gap", 0.18)))
+    top = int(Inches(options.get("content_top", 0.52)))
+    width, height = slide_w - 2*margin, slide_h - top - margin
+    if width <= gap or height <= gap:
+        raise ValueError("Margins leave no content region")
+    pics = [sh for sh in slide.shapes if sh.shape_type == 13]
+    texts = body_text_shapes(slide)
+    sid = SLIDE_IDS.get(idx, "slide-{}".format(idx + 1))
+    font = options.get("font_pt", 28 if layout == "large-text-summary" else 20)
+    for sh in texts:
+        _set_text_shape_font(sh, font)
+    if layout in ("figure-right-text-left", "figure-pair-right-text-left"):
+        expected = 1 if layout == "figure-right-text-left" else 2
+        if len(pics) != expected:
+            raise ValueError("{} requires {} pictures; got {}".format(layout, expected, len(pics)))
+        text_w = int(width * options.get("text_fraction", 0.30))
+        _place_text_group(texts, margin, top, text_w, height, font, sid)
+        fig_left = margin + text_w + gap
+        cell_w = (slide_w - margin - fig_left - gap * (len(pics)-1)) / len(pics)
+        for i, pic in enumerate(pics):
+            fit_picture(pic, fig_left + i * (cell_w + gap), top, cell_w, height)
+    elif layout == "vertical-balanced-text":
+        if len(pics) != 1:
+            raise ValueError("vertical-balanced-text requires one picture")
+        text_h = sum(_estimated_text_height(sh, width, font) for sh in texts) + gap * max(len(texts)-1, 0)
+        frac = FIGURE_HEIGHT_OVERRIDE.get(idx, _default_figure_fraction_from_bullets(sum(_count_bullets(sh) for sh in texts)))
+        fig_top = max(top + text_h + gap, int(slide_h * (1-frac)))
+        if fig_top >= slide_h - margin:
+            raise ValueError("Text leaves no figure region on " + sid)
+        fit_picture(pics[0], margin, fig_top, width, slide_h-margin-fig_top)
+        _place_text_group(texts, margin, top, width, pics[0].top-top-gap, font, sid)
+    else:
+        if pics:
+            raise ValueError("large-text-summary requires a text-only slide")
+        paragraphs = [(sh, para) for sh in texts for para in sh.text_frame.paragraphs if para.text.strip()]
+        if not 3 <= len(paragraphs) <= 4:
+            raise ValueError("large-text-summary requires three or four statements")
+        # Keep one takeaway text frame so /7-ppt-to-5 recovers every statement.
+        # Preserve paragraph XML (runs, emphasis and links), then spread paragraphs.
+        from copy import deepcopy
+        from pptx.oxml.ns import qn
+        import math
+        copies = [deepcopy(para._p) for _, para in paragraphs]
+        box = texts[0]
+        for sh in texts[1:]:
+            sh._element.getparent().remove(sh._element)
+        tf = box.text_frame
+        for element in list(tf._txBody.findall(qn("a:p"))):
+            tf._txBody.remove(element)
+        for element in copies:
+            tf._txBody.append(element)
+        _set_box(box, margin, top, width, height)
+        tf.word_wrap = True
+        tf.vertical_anchor = MSO_ANCHOR.TOP
+        tf.margin_top = tf.margin_bottom = 0
+        _set_text_shape_font(box, font)
+        slot_pt = height / 12700 / len(copies)
+        chars = max(width / 914400 * 72 / font / 0.55, 1)
+        for para in tf.paragraphs:
+            text_pt = max(1, math.ceil(len(para.text) / chars)) * font * 1.35
+            para.space_before = Pt(max((slot_pt-text_pt)/2, 0))
+            para.space_after = Pt(max((slot_pt-text_pt)/2, 0))
+            if text_pt > slot_pt:
+                print("QA WARNING {}: summary statement may overflow.".format(sid))
+
+
+
 def main():
     prs     = Presentation(PPTX_PATH)
     slide_w = prs.slide_width
     slide_h = prs.slide_height
 
+    validate_layout_options(prs)
     for idx, slide in enumerate(prs.slides):
         tag_info = SECTION_TAGS.get(idx)
         fig_path = FIGURES.get(idx)
+        layout = next((name for name in BALANCED_LAYOUTS if idx in LAYOUT_MAP.get(name, [])), None)
+        if layout:
+            if layout == "figure-pair-right-text-left":
+                from collections import Counter
+                existing = Counter(_sha256_bytes(pic.image.blob) for pic in slide.shapes if pic.shape_type == 13)
+                for source in (fig_path if isinstance(fig_path, list) else []):
+                    sha = _sha256_file(source)
+                    if existing[sha]:
+                        existing[sha] -= 1
+                    else:
+                        slide.shapes.add_picture(str(source), 0, 0)
+            if tag_info:
+                add_section_tag(slide, tag_info[0], tag_info[1], slide_w)
+                clear_title(slide)
+            remove_empty_placeholders(slide)
+            set_body_font(slide)
+            apply_balanced_layout(slide, idx, layout, slide_w, slide_h)
+            if REFORMAT_NOTES:
+                format_notes_one_sentence_per_line(slide)
+            continue
 
         if idx in LAYOUT_MAP.get("vstack-3", []):
             paths = fig_path if isinstance(fig_path, list) else [fig_path]
             rebuild_vstack3(slide, paths, tag_info, slide_w, slide_h, idx)
-            format_notes_one_sentence_per_line(slide)
+            if REFORMAT_NOTES:
+                format_notes_one_sentence_per_line(slide)
             continue
 
         if idx in LAYOUT_MAP.get("hstack-3", []):
             paths = fig_path if isinstance(fig_path, list) else [fig_path]
             rebuild_hstack3(slide, paths, tag_info, slide_w, slide_h, idx)
-            format_notes_one_sentence_per_line(slide)
+            if REFORMAT_NOTES:
+                format_notes_one_sentence_per_line(slide)
             continue
 
         if tag_info:
@@ -615,7 +844,8 @@ def main():
             _fit_pictures_to_bottom_region(slide, idx, slide_w, slide_h, bullet_shape)
             _resolve_text_picture_overlap(slide, bullet_shape)
 
-        format_notes_one_sentence_per_line(slide)
+        if REFORMAT_NOTES:
+            format_notes_one_sentence_per_line(slide)
 
     if STAMP_IDS:
         registry = {}
