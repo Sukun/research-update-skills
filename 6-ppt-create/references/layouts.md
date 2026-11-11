@@ -214,3 +214,6 @@ The render command converts legacy `Note:` blocks in its formatted copy before r
 
 ---
 
+## Full-width figure (`figure-full-width`)
+
+Use for a wide or multi-panel figure that should occupy the page (time-series panel grids). Geometry lives in `postprocess_template.py` (`fw_*`, `apply_full_width_layout`). Top bullets: largest N ≤ 3 with the figure at ≥ 75% of content width; the rest go to Notes. Caption: a plain line under the figure, not a bullet. Figure width = content width when the height budget allows; otherwise scaled down and centred.

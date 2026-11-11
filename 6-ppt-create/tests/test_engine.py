@@ -207,3 +207,65 @@ def test_adapter_section_aliases_and_render(tmp_path):
         assert result.returncode == 0, result.stderr
         prs = Presentation(out.with_suffix('.pptx'))
         assert [s.shapes.title.text_frame.text for s in prs.slides] == ['Topic', title]
+
+
+# ---------------------------------------------------------------- figure-full-width
+
+FW_STORY = '''---
+---
+
+<!-- slide-id: FW -->
+<!-- layout: figure-full-width -->
+<!-- section-tag: "Sec" color="teal" -->
+## Full width figure
+
+- first bullet
+- second bullet
+- third bullet
+- fourth bullet
+- fifth bullet
+
+![](wide25.png)
+
+[ ] caption line
+
+::: notes
+authored note
+:::
+'''
+
+
+@pytest.fixture()
+def fw_deck(tmp_path):
+    Image.new('RGB', (2500, 1000), (90, 160, 200)).save(tmp_path / 'wide25.png')
+    sb = tmp_path / 'fw.md'
+    sb.write_text(FW_STORY)
+    out = tmp_path / 'out' / 'fw.pptx'
+    renderer.render(sb, out, project_root=tmp_path)
+    return Presentation(out).slides[0], Presentation(out)
+
+
+def test_full_width_bullets_beyond_n_go_to_notes(fw_deck):
+    slide, _ = fw_deck
+    body = [s for s in slide.shapes if s.has_text_frame and s.text_frame.text.startswith('first')][0]
+    kept = [p.text for p in body.text_frame.paragraphs if p.text.strip()]
+    assert 1 <= len(kept) <= 3 and kept == ['first bullet', 'second bullet', 'third bullet'][:len(kept)]
+    notes = slide.notes_slide.notes_text_frame.text.splitlines()
+    assert notes[0] == 'Also on the slide:'
+    spilled = ['first bullet', 'second bullet', 'third bullet', 'fourth bullet', 'fifth bullet'][len(kept):]
+    assert notes[1:1 + len(spilled)] == spilled and 'authored note' in notes
+    caption = [s for s in slide.shapes if qa.metadata(s).get('role') == 'caption']
+    assert len(caption) == 1 and caption[0].text_frame.text == '[ ] caption line'
+    assert caption[0].text_frame.paragraphs[0].runs[0].font.size.pt <= 12
+
+
+def test_full_width_wide_image_gets_75_percent_and_keeps_aspect(fw_deck):
+    slide, prs = fw_deck
+    pic = next(s for s in slide.shapes if s.shape_type == 13)
+    content_w = prs.slide_width - 2 * 457200
+    assert pic.width >= 0.75 * content_w and pic.width <= content_w + 1
+    assert abs(pic.width / pic.height - 2.5) < 0.01
+    assert pic.crop_left == pic.crop_right == pic.crop_top == pic.crop_bottom == 0
+    assert pic.left >= 457200 - 1 and pic.left + pic.width <= prs.slide_width - 457200 + 1
+    assert abs((pic.left + pic.width / 2) - prs.slide_width / 2) < 2
+    assert pic.top + pic.height <= prs.slide_height

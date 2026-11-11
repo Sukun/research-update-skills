@@ -18,7 +18,7 @@ LAYOUTS = {'custom', 'text-only', 'single', 'figure-dominant', 'annotated', 'vst
            'hstack-2', 'vstack-3', 'hstack-3', 'focus-context', 'grid-2x2',
            'figure-right-text-left', 'figure-pair-right-text-left',
            'figure-left-text-right', 'figure-pair-left-text-right',
-           'vertical-balanced-text', 'large-text-summary', 'table', 'cover'}
+           'vertical-balanced-text', 'large-text-summary', 'figure-full-width', 'table', 'cover'}
 VARIANTS = {'short-keep', 'short-only', 'full-only', 'backup'}
 
 

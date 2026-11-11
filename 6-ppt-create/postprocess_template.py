@@ -7,6 +7,7 @@ from pathlib import Path
 
 from pptx import Presentation
 from pptx.util import Inches, Pt
+from pptx.oxml.ns import qn
 from pptx.dml.color import RGBColor
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 try:
@@ -651,7 +652,7 @@ def write_figure_registry(registry, pptx_path):
 
 BALANCED_LAYOUTS = ("figure-right-text-left", "figure-pair-right-text-left",
                     "figure-left-text-right", "figure-pair-left-text-right",
-                    "vertical-balanced-text", "large-text-summary")
+                    "vertical-balanced-text", "large-text-summary", "figure-full-width")
 # layout -> (picture count, text on the right?). Side layouts: 18 pt bullets,
 # text box and its text both vertically centred against the figure region.
 SIDE_LAYOUTS = {
@@ -758,8 +759,144 @@ def _place_text_group(shapes, left, top, width, height, font_pt, sid):
         cursor += h + gap
 
 
+# --- figure-full-width: shared geometry (inches) ---------------------------
+FW_MARGIN_IN = 0.5          # left/right margin; content width = slide width - 2 * this
+FW_FONT_PT = 16
+FW_LINE_IN = 0.32           # height of one 16 pt text line
+FW_TEXT_PAD_IN = 0.10       # box padding above/below the bullets
+FW_GAP_IN = 0.08
+FW_CAPTION_PT = 11
+FW_CAPTION_H_IN = 0.30
+FW_BOTTOM_IN = 0.12
+FW_MAX_BULLETS = 3
+FW_MIN_WIDTH_FRACTION = 0.75
+FW_NOTES_PREFIX = "Also on the slide:"
+
+
+def fw_line_count(text, width_in, font_pt=FW_FONT_PT):
+    """Estimated wrapped line count of one paragraph (0.5 em average glyph width)."""
+    import math
+    chars = max((width_in - 0.2) * 72 / font_pt / 0.5, 1)
+    return max(1, math.ceil(len(text) / chars))
+
+
+def fw_figure_box(aspect, text_h_in, slide_w_in, slide_h_in, top_in=None):
+    """Figure box (left, top, w, h) in inches below `text_h_in` of top text: full content
+    width if the aspect allows, otherwise scaled down and centred. Never stretched."""
+    top_in = CONTENT_TOP_IN if top_in is None else top_in
+    content_w = slide_w_in - 2 * FW_MARGIN_IN
+    fig_top = top_in + (text_h_in + FW_GAP_IN if text_h_in > 0 else 0)
+    fig_bottom = slide_h_in - FW_BOTTOM_IN - FW_CAPTION_H_IN - FW_GAP_IN
+    avail_h = fig_bottom - fig_top
+    w = min(content_w, avail_h * aspect)
+    h = w / aspect
+    return (slide_w_in - w) / 2, fig_top, w, h
+
+
+def fw_choose_n(line_counts, aspect, slide_w_in, slide_h_in):
+    """Largest N <= 3 (and <= len(line_counts)) whose top text still leaves the figure at
+    least 75% of the content width. Falls back to 1 (0 if there is no text)."""
+    content_w = slide_w_in - 2 * FW_MARGIN_IN
+    best = min(1, len(line_counts))
+    for n in range(min(FW_MAX_BULLETS, len(line_counts)), 0, -1):
+        text_h = sum(line_counts[:n]) * FW_LINE_IN + FW_TEXT_PAD_IN
+        _, _, w, _ = fw_figure_box(aspect, text_h, slide_w_in, slide_h_in)
+        if w >= FW_MIN_WIDTH_FRACTION * content_w - 1e-9:
+            return n
+    return best
+
+
+def apply_full_width_layout(slide, idx, slide_w, slide_h):
+    """Title and tag as usual; top bullets (N chosen by fw_choose_n) under the title; one
+    picture across the full content width; small grey caption; remaining bullets -> notes."""
+    sid = SLIDE_IDS.get(idx, "slide-{}".format(idx + 1))
+    pics = [sh for sh in slide.shapes if sh.shape_type == 13]
+    if len(pics) != 1:
+        raise ValueError("figure-full-width requires one picture; got {}".format(len(pics)))
+    texts = body_text_shapes(slide)
+    if len(texts) > 1:
+        raise ValueError("figure-full-width expects one body text frame")
+    pic = pics[0]
+    w_px, h_px = pic.image.size
+    aspect = (w_px * (1 - pic.crop_left - pic.crop_right) /
+              (h_px * (1 - pic.crop_top - pic.crop_bottom)))
+    sw_in, sh_in = slide_w / 914400, slide_h / 914400
+    content_w = sw_in - 2 * FW_MARGIN_IN
+
+    body = texts[0] if texts else None
+    bullets, captions = [], []
+    if body is not None:
+        for para in body.text_frame.paragraphs:
+            t = para.text.strip()
+            if not t:
+                continue
+            pPr = para._p.pPr
+            is_bullet = pPr is None or pPr.find(qn("a:buNone")) is None
+            (captions if (t.startswith("[") and not is_bullet) else bullets).append(para)
+    lines = [fw_line_count(p.text, content_w) for p in bullets]
+    n = fw_choose_n(lines, aspect, sw_in, sh_in)
+    keep, spill = bullets[:n], bullets[n:]
+    text_h = (sum(lines[:n]) * FW_LINE_IN + FW_TEXT_PAD_IN) if n else 0
+
+    if body is not None:
+        from copy import deepcopy
+        cap_elems = [deepcopy(p._p) for p in captions]
+        spill_text = [p.text for p in spill]
+        for p in spill + captions:
+            p._p.getparent().remove(p._p)
+        if n:
+            _set_box(body, Inches(FW_MARGIN_IN), Inches(CONTENT_TOP_IN), Inches(content_w), Inches(text_h))
+            tf = body.text_frame
+            tf.word_wrap = True
+            tf.vertical_anchor = MSO_ANCHOR.TOP
+            tf.margin_top = tf.margin_bottom = Inches(0.03)
+            _set_text_shape_font(body, FW_FONT_PT)
+            _ensure_bullets(body)
+        else:
+            body._element.getparent().remove(body._element)
+    else:
+        cap_elems, spill_text = [], []
+
+    left, top, w, h = fw_figure_box(aspect, text_h, sw_in, sh_in)
+    _set_box(pic, Inches(left), Inches(top), Inches(w), Inches(h))
+
+    if cap_elems:
+        cap_top = max(top + h + FW_GAP_IN, 0)
+        box = slide.shapes.add_textbox(Inches(FW_MARGIN_IN), Inches(cap_top),
+                                       Inches(content_w), Inches(FW_CAPTION_H_IN))
+        tf = box.text_frame
+        tf.word_wrap = True
+        tf.margin_top = tf.margin_bottom = Inches(0.02)
+        for element in list(tf._txBody.findall(qn("a:p"))):
+            tf._txBody.remove(element)
+        for element in cap_elems:
+            tf._txBody.append(element)
+        for para in tf.paragraphs:
+            para.alignment = PP_ALIGN.CENTER
+            pPr = para._p.get_or_add_pPr()
+            pPr.set("marL", "0")
+            pPr.set("indent", "0")
+            for run in para.runs:
+                run.font.size = Pt(FW_CAPTION_PT)
+                run.font.color.rgb = RGBColor(*LABEL_GREY)
+        if len(cap_elems) > 1 or fw_line_count(box.text_frame.text, content_w, FW_CAPTION_PT) > 1:
+            print("QA WARNING {}: caption may wrap beyond one line.".format(sid))
+        _set_meta(box, "sb:role=caption", {"role": "caption"})
+
+    if spill_text:
+        ntf = slide.notes_slide.notes_text_frame
+        existing = ntf.text.strip()
+        block = [FW_NOTES_PREFIX] + spill_text
+        ntf.text = "\n".join(block + ([""] + existing.splitlines() if existing else []))
+    print("figure-full-width {}: N={} top bullets kept, {} moved to notes; figure {:.2f} in wide ({:.0f}% of content width)"
+          .format(sid, n, len(spill_text), w, 100 * w / content_w))
+    return n
+
+
 def apply_balanced_layout(slide, idx, layout, slide_w, slide_h):
     from pptx.enum.text import MSO_ANCHOR
+    if layout == "figure-full-width":
+        return apply_full_width_layout(slide, idx, slide_w, slide_h)
     options = _options(idx)
     margin = int(Inches(options.get("margin", 0.30)))
     gap = int(Inches(options.get("gap", 0.18)))

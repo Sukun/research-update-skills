@@ -43,6 +43,7 @@ New opt-in choices:
 | `figure-pair-left-text-right` | Mirror image: two aligned figures at left, text at right. |
 
 All four side-by-side layouts share one text rule: the text box spans the figure region, so the box is vertically centred against the figure, and its text is anchored middle. Text is 18 pt by default (`font_pt` overrides) and every non-empty paragraph is a bullet point; existing bullets are kept.
+| `figure-full-width` | One wide or multi-panel figure (aspect about 2.2 or wider, e.g. a 2×3 panel grid) spanning the full content width below up to three short top bullets; the section label stays top-right. Figure is never stretched or cropped; if the full width would exceed the height budget it is scaled down and centred. The top-bullet count is the largest N ≤ 3 that still leaves the figure at least 75% of content width; the rest go to Notes, prefixed "Also on the slide:". Caption is a plain line under the figure. |
 | `vertical-balanced-text` | One figure below; centre text in the available space above it without overlap. Text spans the slide width less margins (about 95%). Recommended for a single near-square figure (aspect about 0.8–1.25): figure in the lower-middle, horizontally centred, text above. |
 | `large-text-summary` | Three or four editable statements, evenly spaced, 28 pt by default; no coloured cards. |
 
