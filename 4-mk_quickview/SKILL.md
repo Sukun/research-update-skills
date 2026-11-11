@@ -34,7 +34,7 @@ Trigger on:
 1-plan → 3-conduct → 4-mk_quickview (per run) ──share──► PPTX   (fast, frequent sharing)
                           │ accumulate on one topic
                           ▼
-                     4b-topic-record (per topic: 00_README.md L1/L2/L3)
+                     4b-topic-record (per topic: 00_README.md Summary/Evidence/Log)
                           │ accumulate topics
                           ▼
                      5-ppt-design (story across topics) → 6-ppt-create → PPTX → 7-ppt-to-5
@@ -193,7 +193,7 @@ Interpreter: `PY=/home/users/tg932198/.conda/envs/amoc/bin/python`;
 ### Mode A — from a quickview (or any figure-first markdown)
 
 ```bash
-$PY $SKILL_DIR/md_to_slides.py quickview_<topic>_<date>.md --render [--tag-prefix OSNAP] [--layout vstack-3] [--no-cover]
+$PY $SKILL_DIR/../6-ppt-create/md_to_slides.py quickview_<topic>_<date>.md --render [--tag-prefix OSNAP] [--layout vstack-3] [--no-cover]
 ```
 
 - One `## ` block → one slide, in order. `# Title` + date line → cover slide.
@@ -211,7 +211,8 @@ $PY $SKILL_DIR/md_to_slides.py quickview_<topic>_<date>.md --render [--tag-prefi
   `mc:AlternateContent`, which 6-ppt-create's post-processing cannot see). The markdown keeps TeX.
 - Output: `<source>_slides_<dd-mm-yyyy>.md` (6-ppt-create storyboard) + `.index.json` + `.pptx`
   + `_postprocess.py` beside the source (use `-o` for another location, e.g. `docs/slides/`).
-- The same command renders a topic record's summary: `md_to_slides.py 00_README.md --section L1 --render`.
+- The same command renders a topic record's Summary: `6-ppt-create/md_to_slides.py 00_README.md --section Summary --render`.
+- `md_to_slides.py` is moving into `6-ppt-create` as its Markdown input adapter (`6-ppt-create/md_to_slides.py`); a forwarding shim stays at the old path in this folder.
 
 ### Mode B — explicit arrangement of files in a directory (former 5a)
 
@@ -227,7 +228,7 @@ one line; do not override). Never add cover, outline, summary, bullets or notes 
 2. Dry run: `$PY $SKILL_DIR/assemble_figures.py spec.json` → prints the matrix.
    `[MISSING]` → report, never substitute. `[AMBIGUOUS]` → show candidates, ask, add `overrides`.
 3. `$PY $SKILL_DIR/assemble_figures.py spec.json --write -o <out>/<topic>_<dd-mm-yyyy>.md`
-4. `$PY $SKILL_DIR/md_to_slides.py <out>/<topic>_<dd-mm-yyyy>.md --render-only`
+4. `$PY $SKILL_DIR/../6-ppt-create/md_to_slides.py <out>/<topic>_<dd-mm-yyyy>.md --render-only`
 
 ### What `--render` / `--render-only` does (6-ppt-create phases, chained)
 

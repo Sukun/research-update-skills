@@ -8,6 +8,7 @@ from pathlib import Path
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
+from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 try:
     from PIL import Image
 except ImportError:
@@ -69,6 +70,7 @@ COLOR_MAP = {
     'teal':       (  0, 128, 128),
     'purple':     (128,   0, 128),
     'crimson':    (220,  20,  60),
+    'grey':       (112, 112, 112),
 }
 
 def get_aspect(path, fallback=1.6):
@@ -100,34 +102,65 @@ def body_text_shapes(slide):
             and sh.text_frame.text.strip()]
 
 
+# Title + section-label geometry (inches). The title always stays in its own
+# placeholder; a section tag is only a small label in the top-right corner.
+TITLE_PT = 24
+TITLE_LEFT, TITLE_TOP, TITLE_H = 0.30, 0.12, 0.85
+LABEL_W, LABEL_H, LABEL_PT = 3.0, 0.32, 13
+CONTENT_TOP_IN = 1.05          # first content row below a (possibly 2-line) title
+LABEL_GREY = (0x70, 0x70, 0x70)
+
+
 def add_section_tag(slide, tag_text, color_name, slide_w):
+    """Small top-right label (13 pt, tag colour). Never touches the title."""
     for shape in slide.shapes:
         if shape_role(shape) == "section":
             if shape.text != tag_text:
                 shape.text = tag_text
             return shape
-    rgb = COLOR_MAP.get(color_name, (70, 130, 180))
-    box = slide.shapes.add_textbox(Inches(0.08), Inches(0.05), int(slide_w * 0.70), Inches(0.36))
-    tf  = box.text_frame
-    tf.word_wrap = False
-    run = tf.paragraphs[0].add_run()
-    run.text           = tag_text
-    run.font.size      = Pt(24)
-    run.font.bold      = True
-    run.font.color.rgb = RGBColor(255, 255, 255)
-    box.fill.solid()
-    box.fill.fore_color.rgb = RGBColor(*rgb)
-    tf.margin_left = tf.margin_right = Inches(0.06)
-    tf.margin_top  = tf.margin_bottom = Inches(0.02)
+    rgb = COLOR_MAP.get(color_name, LABEL_GREY)
+    left = int(slide_w - Inches(LABEL_W + 0.15))
+    box = slide.shapes.add_textbox(left, Inches(TITLE_TOP), Inches(LABEL_W), Inches(LABEL_H))
+    tf = box.text_frame
+    tf.word_wrap = True
+    tf.margin_top = tf.margin_bottom = Inches(0.02)
+    para = tf.paragraphs[0]
+    para.alignment = PP_ALIGN.RIGHT
+    run = para.add_run()
+    run.text = tag_text
+    run.font.size = Pt(LABEL_PT)
+    run.font.bold = False
+    run.font.color.rgb = RGBColor(*rgb)
     _set_meta(box, "sb:role=section", {"role": "section"})
     return box
 
-def clear_title(slide):
+
+def is_cover(slide):
+    try:
+        return slide.slide_layout.name == "Title Slide"
+    except Exception:
+        return False
+
+
+def place_title(slide, slide_w, has_tag):
+    """Title stays in its placeholder: 24 pt bold, top-left, up to two lines.
+    Width stops before the corner label when a tag exists. Cover slides are untouched."""
     title = slide.shapes.title
-    if title is not None and title.has_text_frame:
-        for para in title.text_frame.paragraphs:
-            for run in para.runs:
-                run.text = ""
+    if title is None or not title.has_text_frame or is_cover(slide):
+        return
+    right_reserved = LABEL_W + 0.3 if has_tag else 0.3
+    title.left, title.top = int(Inches(TITLE_LEFT)), int(Inches(TITLE_TOP))
+    title.width = int(slide_w - Inches(TITLE_LEFT + right_reserved))
+    title.height = int(Inches(TITLE_H))
+    tf = title.text_frame
+    tf.word_wrap = True
+    tf.vertical_anchor = MSO_ANCHOR.TOP
+    for para in tf.paragraphs:
+        para.alignment = PP_ALIGN.LEFT
+        for run in para.runs:
+            run.font.size = Pt(TITLE_PT)
+            run.font.bold = True
+
 
 def remove_empty_placeholders(slide):
     """Delete placeholder shapes whose text content is entirely empty."""
@@ -150,7 +183,7 @@ def enforce_content_placeholder_geometry(slide, slide_w, slide_h, has_tag, n_pic
     Cover slides / untagged slides are skipped entirely: touching a layout-inherited
     placeholder's geometry without setting all four xfrm fields can zero out height.
     """
-    if not has_tag or n_pics > 0:
+    if not has_tag or n_pics > 0:   # has_tag: "slide is not a cover"
         return
     for ph in slide.placeholders:
         if ph.placeholder_format.idx == 0:
@@ -159,8 +192,8 @@ def enforce_content_placeholder_geometry(slide, slide_w, slide_h, has_tag, n_pic
             continue
         ph.left = int(slide_w * 0.05)
         ph.width = int(slide_w * 0.90)
-        ph.top = int(Inches(0.52))
-        ph.height = int(slide_h - Inches(0.60))
+        ph.top = int(Inches(CONTENT_TOP_IN))
+        ph.height = int(slide_h - Inches(CONTENT_TOP_IN + 0.30))
         break
 
 def format_notes_one_sentence_per_line(slide):
@@ -232,7 +265,7 @@ def _resolve_text_picture_overlap(slide, text_shape):
 def ensure_bullet_placeholder(slide, slide_w):
     """Ensure a top-half bullet band (1-3 bullets) below the section tag."""
     band_left = int(Inches(0.5))
-    band_top = int(Inches(0.52))
+    band_top = int(Inches(CONTENT_TOP_IN))
     band_width = int(slide_w - 2 * Inches(0.5))
     band_height = int(Inches(1.6))
 
@@ -260,9 +293,13 @@ def ensure_bullet_placeholder(slide, slide_w):
     tf.word_wrap = True
 
     has_user_text = bool(tf.text.strip())
+    if has_user_text:
+        # Band height follows the text (0.7"-1.6") so short text frees height for figures.
+        est = _estimated_text_height(bullet_shape, band_width, 20)
+        bullet_shape.height = int(max(Inches(0.7), min(est + Inches(0.1), Inches(1.6))))
     if not has_user_text and not BULLET_PLACEHOLDERS:
         tf.clear()
-        bullet_shape.top = int(Inches(0.50))
+        bullet_shape.top = int(Inches(CONTENT_TOP_IN - 0.02))
         bullet_shape.height = int(Inches(0.06))
         return bullet_shape
 
@@ -294,17 +331,23 @@ def _default_figure_fraction_from_bullets(bullet_count):
         return 10 / 14
     return 9 / 14
 
+FIG_BOTTOM_MARGIN_IN = 0.15
+
+
 def _figure_region_geometry(slide_idx, slide_h, text_shape):
+    """(top, height) of the figure region. Without an explicit figure-height the region
+    starts right below the text band (or the title when there is no text) and runs to the
+    bottom margin; an explicit override keeps the legacy fraction-from-bottom rule."""
     frac = FIGURE_HEIGHT_OVERRIDE.get(slide_idx)
+    bottom = int(slide_h) - int(Inches(FIG_BOTTOM_MARGIN_IN))
+    min_top = (int(text_shape.top + text_shape.height + Inches(0.08)) if text_shape is not None
+               else int(Inches(CONTENT_TOP_IN)))
     if frac is None:
-        frac = _default_figure_fraction_from_bullets(_count_bullets(text_shape))
-    frac = max(1e-3, min(float(frac), 1.0))
-    fig_h = int(slide_h * frac)
-    fig_top = int(slide_h) - fig_h
-    min_top = int(text_shape.top + text_shape.height + Inches(0.08)) if text_shape is not None else 0
-    fig_top = max(fig_top, min_top)
-    fig_h = int(slide_h) - fig_top
-    return fig_top, fig_h
+        fig_top = min_top
+    else:
+        frac = max(1e-3, min(float(frac), 1.0))
+        fig_top = max(int(slide_h) - int(slide_h * frac), min_top)
+    return fig_top, bottom - fig_top
 
 def _fit_pictures_to_bottom_region(slide, slide_idx, slide_w, slide_h, text_shape):
     """Fit 1-4 pictures into the target bottom figure region while preserving arrangement."""
@@ -403,8 +446,8 @@ def _prepare_rebuild_pictures(slide, paths):
 
 def rebuild_vstack3(slide, fig_paths, tag_info, slide_w, slide_h, slide_idx):
     pictures = _prepare_rebuild_pictures(slide, fig_paths)
+    place_title(slide, slide_w, bool(tag_info))
     if tag_info:
-        clear_title(slide)
         add_section_tag(slide, tag_info[0], tag_info[1], slide_w)
     text_shape = ensure_bullet_placeholder(slide, slide_w)
     top, height = _figure_region_geometry(slide_idx, slide_h, text_shape)
@@ -416,8 +459,8 @@ def rebuild_vstack3(slide, fig_paths, tag_info, slide_w, slide_h, slide_idx):
 
 def rebuild_hstack3(slide, fig_paths, tag_info, slide_w, slide_h, slide_idx):
     pictures = _prepare_rebuild_pictures(slide, fig_paths)
+    place_title(slide, slide_w, bool(tag_info))
     if tag_info:
-        clear_title(slide)
         add_section_tag(slide, tag_info[0], tag_info[1], slide_w)
     text_shape = ensure_bullet_placeholder(slide, slide_w)
     top, height = _figure_region_geometry(slide_idx, slide_h, text_shape)
@@ -527,7 +570,8 @@ def stamp_identity(slide, idx, registry):
     tag_text = tag_info[0].strip() if tag_info else None
     for sh in _slide_text_shapes(slide):
         txt = sh.text_frame.text.strip()
-        if tag_text and txt == tag_text and chip is None:
+        is_title = sh.is_placeholder and sh.placeholder_format.idx == 0
+        if chip is None and tag_text and ((shape_role(sh) == "section") or (txt == tag_text and not is_title)):
             chip = sh
         elif sh.is_placeholder and sh.placeholder_format.idx == 0 and txt and title_ph is None:
             title_ph = sh
@@ -719,7 +763,7 @@ def apply_balanced_layout(slide, idx, layout, slide_w, slide_h):
     options = _options(idx)
     margin = int(Inches(options.get("margin", 0.30)))
     gap = int(Inches(options.get("gap", 0.18)))
-    top = int(Inches(options.get("content_top", 0.52)))
+    top = int(Inches(options.get("content_top", CONTENT_TOP_IN)))
     width, height = slide_w - 2*margin, slide_h - top - margin
     if width <= gap or height <= gap:
         raise ValueError("Margins leave no content region")
@@ -761,8 +805,9 @@ def apply_balanced_layout(slide, idx, layout, slide_w, slide_h):
         if len(pics) != 1:
             raise ValueError("vertical-balanced-text requires one picture")
         text_h = sum(_estimated_text_height(sh, width, font) for sh in texts) + gap * max(len(texts)-1, 0)
-        frac = FIGURE_HEIGHT_OVERRIDE.get(idx, _default_figure_fraction_from_bullets(sum(_count_bullets(sh) for sh in texts)))
-        fig_top = max(top + text_h + gap, int(slide_h * (1-frac)))
+        frac = FIGURE_HEIGHT_OVERRIDE.get(idx)
+        # Without an explicit figure-height the figure starts right below the measured text.
+        fig_top = top + text_h + gap if frac is None else max(top + text_h + gap, int(slide_h * (1-frac)))
         if fig_top >= slide_h - margin:
             raise ValueError("Text leaves no figure region on " + sid)
         fit_picture(pics[0], margin, fig_top, width, slide_h-margin-fig_top)
@@ -813,6 +858,8 @@ def main():
         tag_info = SECTION_TAGS.get(idx)
         fig_path = FIGURES.get(idx)
         layout = next((name for name in BALANCED_LAYOUTS if idx in LAYOUT_MAP.get(name, [])), None)
+        if not (idx in LAYOUT_MAP.get("vstack-3", []) or idx in LAYOUT_MAP.get("hstack-3", [])):
+            place_title(slide, slide_w, bool(tag_info))
         if layout:
             if layout in ("figure-pair-right-text-left", "figure-pair-left-text-right"):
                 from collections import Counter
@@ -825,7 +872,6 @@ def main():
                         slide.shapes.add_picture(str(source), 0, 0)
             if tag_info:
                 add_section_tag(slide, tag_info[0], tag_info[1], slide_w)
-                clear_title(slide)
             remove_empty_placeholders(slide)
             set_body_font(slide)
             apply_balanced_layout(slide, idx, layout, slide_w, slide_h)
@@ -849,12 +895,11 @@ def main():
 
         if tag_info:
             add_section_tag(slide, tag_info[0], tag_info[1], slide_w)
-            clear_title(slide)
 
         remove_empty_placeholders(slide)
 
         n_pics_now = len([s for s in slide.shapes if s.shape_type == 13])
-        enforce_content_placeholder_geometry(slide, slide_w, slide_h, bool(tag_info), n_pics_now)
+        enforce_content_placeholder_geometry(slide, slide_w, slide_h, not is_cover(slide), n_pics_now)
 
         set_body_font(slide)
 

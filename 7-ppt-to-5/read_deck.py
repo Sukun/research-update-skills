@@ -121,10 +121,15 @@ def extract_slide(slide, idx, bootstrap):
             elif takeaway is None:
                 takeaway = sh
 
-    title_shape = chip or title_ph
+    # Decks from the python-pptx engine keep the title in its placeholder and the
+    # section as a small label (chip); legacy decks stored "title · section" in the chip.
+    title_shape = title_ph or chip
     title = text_of(title_shape) if title_shape is not None else None
-    parts = [p.strip() for p in title.split("·")] if title else []
-    section = parts[1] if len(parts) >= 2 else None
+    if title_ph is not None and chip is not None:
+        section = text_of(chip)
+    else:
+        parts = [p.strip() for p in title.split("·")] if title else []
+        section = parts[1] if len(parts) >= 2 else None
 
     figs, opaque = [], []
     for z, sh in enumerate(sh for sh in slide.shapes):

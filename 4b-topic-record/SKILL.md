@@ -1,6 +1,6 @@
 ---
 name: 4b-topic-record
-description: "Summarise accumulated notes, quickviews and reports on ONE research topic into a single ppt-style markdown record — <topic>/00_README.md with L1 summary slides (key figure + 2 lines each), L2 skippable evidence, L3 dated log, and a source-notes table — and number the topic's notes in plan → results order. Project mode: one cross-topic progress page (STATUS.md) from the records' L1. Use when the user says topic record, summarise this topic, organise this topic folder, consolidate these notes, or wants to pick a topic back up after weeks. Figures are linked, never copied, so regenerated plots update automatically. Not for a single run's figures (use 4-mk_quickview), manuscripts (use 4-report), or multi-topic decks (use 5-ppt-design, which reads these records' L1)."
+description: "Summarise accumulated notes, quickviews and reports on ONE research topic into a single ppt-style markdown record — <topic>/00_README.md with Summary slides (key figure + 2 lines each), skippable Evidence, a dated Log, and a source-notes table — and number the topic's notes in plan → results order. Project mode: one cross-topic progress page (STATUS.md) from the records' Summary. Use when the user says topic record, summarise this topic, organise this topic folder, consolidate these notes, or wants to pick a topic back up after weeks. Figures are linked, never copied, so regenerated plots update automatically. Not for a single run's figures (use 4-mk_quickview), manuscripts (use 4-report), or multi-topic decks (use 5-ppt-design, which reads these records' Summary)."
 ---
 
 # Topic Record
@@ -11,9 +11,9 @@ Before producing output, read the user's presentation preferences at `/Users/tg9
 
 ## Purpose
 
-One file per research topic that can be reviewed **like a short deck**: read L1 in two
-minutes to recover the framework, conclusions-so-far and open decisions; drop to L2 only for
-numbers and method; use L3 to see the order in which things happened.
+One file per research topic that can be reviewed **like a short deck**: read the Summary in two
+minutes to recover the framework, conclusions-so-far and open decisions; drop to Evidence only for
+numbers and method; use the Log to see the order in which things happened.
 
 ```
 4-mk_quickview (per run) ──accumulate──► 4b-topic-record (per topic) ──several topics──► 5-ppt-design → 6-ppt-create
@@ -33,12 +33,12 @@ new figures and adds no new interpretation.
 |---|---|
 | Look at one run's figures | `4-mk_quickview` |
 | Interpretation / write-up for readers | `4-report` |
-| A deck across several topics | `5-ppt-design` (reads each record's L1) |
+| A deck across several topics | `5-ppt-design` (reads each record's Summary) |
 | Log one finding or decision | `log-finding` / `noteit` |
 
 ## Output
 
-- `<topic_dir>/00_README.md` — the record (overwrite on refresh; keep L3 history).
+- `<topic_dir>/00_README.md` — the record (overwrite on refresh; keep Log history).
 - The topic's notes renamed `01_…`, `02_…` in **plan → results, oldest first** order.
 - Updated links in the parent index files that point at renamed notes.
 
@@ -47,12 +47,13 @@ new figures and adds no new interpretation.
 ```markdown
 # <Topic> — topic record
 
+Outline: §<n> <L2 heading>[, §<m> <L2 heading>]   ← omit if the project has no outline
 Last updated <yyyy-mm-dd> · **State:** <one line: where the topic stands now>
-Read **L1** for the overview (2 min). **L2** is skippable detail, numbered to match L1. **L3** is the dated log.
+Read **Summary** for the overview (2 min). **Evidence** is skippable detail, numbered to match the Summary. **Log** is the dated history.
 
 ---
 
-# L1 · Summary
+# Summary
 
 ## 1. Question and framework          ← 2–3 bullets, no figure: question, key definitions, conventions
 
@@ -74,15 +75,15 @@ Read **L1** for the overview (2 min). **L2** is skippable detail, numbered to ma
 
 ---
 
-# L2 · Evidence (skippable)
+# Evidence
 
-## 2a. <same title stem as L1 slide 2> — detail
+## 2a. <same title stem as Summary slide 2> — detail
 Compact paragraph(s): data, window, method, all numbers, flags, caveats; companion figures;
 `Source: [01_…](01_….md) §x`.
 
 ---
 
-# L3 · Log (newest first)
+# Log (newest first)
 - yyyy-mm-dd — what was done (→ slide numbers)
 
 # Source notes
@@ -93,13 +94,13 @@ Compact paragraph(s): data, window, method, all numbers, flags, caveats; compani
 
 Figure numbering (journal style, so any figure can be cited as "Figure N" or "<topic> Figure N"):
 
-- **One running `Figure N` per record**, assigned top to bottom in document order: L1 first, then L2.
+- **One running `Figure N` per record**, assigned top to bottom in document order: Summary first, then Evidence.
   Never restart per section, and companion figures (Full/East/West, T/S/σ) get consecutive numbers,
   not sub-letters, unless the user asks for panels.
 - **Every embedded figure is followed directly by `**Figure N.** <caption>`**, one line saying what
-  is plotted (data, period, smoothing), with no interpretation. On an L1 slide the caption is the
+  is plotted (data, period, smoothing), with no interpretation. On a Summary slide the caption is the
   slide's first bullet, so a slide has the caption plus at most 2 more bullets.
-- A figure that appears in both L1 and L2 keeps its **first** number. In L2, refer to it as
+- A figure that appears in both Summary and Evidence keeps its **first** number. In Evidence, refer to it as
   "Figure N" in text and do not embed or caption it again.
 - Text that points at a figure says "Figure N" (for example "see Figure 4") rather than re-describing it.
 - When refreshing an existing record, keep the numbers of unchanged figures and append new ones
@@ -109,15 +110,25 @@ Figure numbering (journal style, so any figure can be cited as "Figure N" or "<t
 - If a note already carries its own `Figure N`, the record's number wins. Give the source's
   number in the caption as "(source note 04, its Fig 2)" so both stay traceable.
 
-Rules for L1 (it must render cleanly with `4-mk_quickview/md_to_slides.py --section L1`):
+Rules for the Summary (it must render cleanly with `6-ppt-create/md_to_slides.py 00_README.md --section Summary`; the adapter accepts both `L1` and `Summary` during the transition):
 
 - Every slide is a `## ` heading. **Titles state the finding**, not the topic ("Cross-latitude
   coupling is weak", not "Cross-latitude results"). Keep titles ≤ 65 characters after TeX → Unicode.
 - ≤ 1 key figure per result slide (2–3 only for companion Full/East/West sets), ≤ 3 bullets,
   the first being the `**Figure N.**` caption.
-  Put everything else in L2.
-- No level-1 headings inside L1, no tables, no nested bullets.
+  Put everything else in Evidence.
+- No level-1 headings inside the Summary, no tables, no nested bullets.
 - Slide 1 is the framework and the last slide is open decisions. Everything between is results in reading order.
+
+Declaration rule: the second line of the record is `Outline: §<n> <L2 heading>` (one or more,
+comma-separated) naming the project outline L2 the topic serves (framework D2/D3). If the
+project has no outline, omit it. Do not add figure checkboxes inside a topic record: figure
+selection (framework D6) happens in the outline, which picks from the Summary figures.
+
+Legacy records: existing records with `# L1 · Summary` / `# L2 · Evidence (skippable)` /
+`# L3 · Log` headings still work and are migrated to the new names on their next refresh. No bulk rewrite.
+
+Shared design (levels, topic-record sections, figure status): `01-research-outline/references/framework.md`.
 
 ## Content rules
 
@@ -151,7 +162,7 @@ Rules for L1 (it must render cleanly with `4-mk_quickview/md_to_slides.py --sect
 4. **Write `00_README.md`** per the structure above.
 5. **Verify.** Every `](…)` link in the record resolves from the topic directory. Every embedded
    figure has a caption, and numbers run 1..N in document order with no duplicates. Optionally,
-   dry-run `md_to_slides.py 00_README.md --section L1 -o <scratchpad>/check.md`: it must exit 0.
+   dry-run `md_to_slides.py 00_README.md --section Summary -o <scratchpad>/check.md`: it must exit 0.
 6. **Link the record** as the first entry for the topic in the parent index (for example
    `docs/README.md`).
 7. **Report:** record path, rename table, alias symlinks created, references updated, references
@@ -161,13 +172,13 @@ Rules for L1 (it must render cleanly with `4-mk_quickview/md_to_slides.py --sect
 
 Trigger: "project progress", "overview of all topics". Refresh each topic record first, then write
 one page (the project's `STATUS.md` unless the user names another path) built **only from the
-records' L1 and the staleness check**:
+records' Summary and the staleness check**:
 
 - Header: date, one-line current stage, current definitions/windows table.
 - Per topic, one block: link to its record, 1 key figure + caption, then four one-line bullets —
   **Done**, **Finding**, **Problem** (incl. [stale] items), **Next**.
 - Then one table of open decisions/next work across topics (ID, task, status, dependency).
-- No L2 detail, no new interpretation. Listing work does not authorize it.
+- No Evidence detail, no new interpretation. Listing work does not authorize it.
 
 ## Safety
 

@@ -1,5 +1,7 @@
 # Legacy layout rules
 
+Note: these were written for the Pandoc writer. The default `pptx` engine (build_pptx.py) accepts text plus several figures on one slide for every layout; the `{width=...}` / columns syntax is accepted but ignored, and the Pandoc-specific notes below only matter with `--engine pandoc`.
+
 These remain available for existing storyboards. The main skill lists the new opt-in layouts. Geometry-only previews are not office renders.
 
 ## Figure Layout Rules

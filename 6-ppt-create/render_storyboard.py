@@ -13,11 +13,12 @@ from pathlib import Path
 from urllib.parse import unquote
 
 SKILL = Path(__file__).resolve().parent
+sys.path.insert(0, str(SKILL))
 LAYOUTS = {'custom', 'text-only', 'single', 'figure-dominant', 'annotated', 'vstack-2',
            'hstack-2', 'vstack-3', 'hstack-3', 'focus-context', 'grid-2x2',
            'figure-right-text-left', 'figure-pair-right-text-left',
            'figure-left-text-right', 'figure-pair-left-text-right',
-           'vertical-balanced-text', 'large-text-summary', 'table'}
+           'vertical-balanced-text', 'large-text-summary', 'table', 'cover'}
 VARIANTS = {'short-keep', 'short-only', 'full-only', 'backup'}
 
 
@@ -285,20 +286,10 @@ def restore_recorded_geometry(pptx, slides, deck_json):
     return count
 
 
-def render(storyboard, output, pandoc, reference=None, project_root=None, variants=(), backup='exclude', deck_json=None):
+def render_with_pandoc(storyboard, output, slides, pandoc, reference=None):
+    """Legacy engine (deprecated): known to drop/split slides holding text + several pictures."""
     from pptx import Presentation
-    storyboard=Path(storyboard).resolve();output=Path(output).resolve()
-    if output==storyboard or output.suffix.lower()!='.pptx':
-        raise ValueError('Output must be a separate PPTX file')
-    slides=parse_storyboard(storyboard)
-    deck_json=find_deck_json(storyboard, deck_json)
-    if variants and any(s.get("generated_id") for s in slides):
-        raise ValueError("Variants require explicit stable slide-id comments before rendering")
-    if reference is None:
-        local_reference = storyboard.parent / "reference.pptx"
-        if local_reference.is_file():
-            reference = local_reference
-    output.parent.mkdir(parents=True,exist_ok=True)
+    print('WARNING: --engine pandoc is deprecated; it drops pictures and splits slides with text plus several figures.')
     formatted=output.with_suffix('.render.md')
     blocks=[]
     for s in slides:
@@ -318,9 +309,36 @@ def render(storyboard, output, pandoc, reference=None, project_root=None, varian
     for slide,expected in zip(prs.slides,slides):
         if slide.shapes.title is None or slide.shapes.title.text.strip()!=expected['title']:
             raise ValueError('Pandoc title/index mismatch on '+expected['id'])
+
+
+def render(storyboard, output, pandoc=None, reference=None, project_root=None, variants=(), backup='exclude', deck_json=None, engine='pptx'):
+    """Storyboard -> PPTX. engine='pptx' (default) builds the raw deck directly with
+    build_pptx.py; engine='pandoc' keeps the legacy Pandoc writer for one transition
+    period. Either way the unchanged postprocess_template.py owns the geometry.
+    No reference template is used unless `reference` is passed explicitly."""
+    from pptx import Presentation
+    storyboard=Path(storyboard).resolve();output=Path(output).resolve()
+    if output==storyboard or output.suffix.lower()!='.pptx':
+        raise ValueError('Output must be a separate PPTX file')
+    if engine not in ('pptx','pandoc'):
+        raise ValueError('engine must be pptx or pandoc')
+    slides=parse_storyboard(storyboard)
+    deck_json=find_deck_json(storyboard, deck_json)
+    if variants and any(s.get("generated_id") for s in slides):
+        raise ValueError("Variants require explicit stable slide-id comments before rendering")
+    output.parent.mkdir(parents=True,exist_ok=True)
+    if engine=='pptx':
+        import build_pptx
+        unmapped=build_pptx.build(slides,output,reference)
+        if unmapped:
+            print('WARNING: LaTeX not mapped to plain text (left out of the slides): '+', '.join(unmapped))
+    else:
+        if not pandoc:
+            raise ValueError('Pandoc unavailable; pass --pandoc /path/to/pandoc')
+        render_with_pandoc(storyboard,output,slides,pandoc,reference)
     layout_map={}
     for s in slides:layout_map.setdefault(s['layout'],[]).append(s['index'])
-    values=dict(PPTX_PATH=str(output),SECTION_TAGS={s['index']:tuple(s['tag']) for s in slides if s['tag']},
+    values=dict(PPTX_PATH=str(output),SECTION_TAGS={s['index']:tuple(s['tag']) for s in slides if s['tag'] and s['tag'][0].strip()!=s['title'].strip()},
                 LAYOUT_MAP=layout_map,FIGURES={s['index']:(s['paths'][0] if len(s['paths'])==1 else s['paths']) for s in slides if s['paths']},
                 FIGURE_HEIGHT_OVERRIDE={s['index']:s['override'] for s in slides if s['override'] is not None},
                 SLIDE_IDS={s['index']:s['id'] for s in slides},LAYOUT_OPTIONS={s['id']:s['options'] for s in slides if s['options']},
@@ -344,15 +362,16 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('storyboard',type=Path)
     parser.add_argument('-o','--output',type=Path)
-    parser.add_argument('--pandoc',default=shutil.which('pandoc'))
-    parser.add_argument('--reference',type=Path)
+    parser.add_argument('--engine',choices=['pptx','pandoc'],default='pptx',help='pptx: direct python-pptx builder (default); pandoc: deprecated legacy writer')
+    parser.add_argument('--pandoc',default=shutil.which('pandoc'),help='only for --engine pandoc')
+    parser.add_argument('--reference',type=Path,help='optional template; none is used unless given')
     parser.add_argument('--deck-json',type=Path,help='Restore recorded figure geometry from this deck.json (otherwise discover a matching sibling)')
     parser.add_argument('--project-root',type=Path)
     parser.add_argument('--variants',nargs='+',choices=['short','full'],default=[])
     parser.add_argument('--backup',choices=['exclude','append','hidden'],default='exclude')
     args=parser.parse_args()
-    if not args.pandoc:parser.error('Pandoc unavailable; pass --pandoc /path/to/pandoc')
-    outputs,_=render(args.storyboard,args.output or args.storyboard.with_suffix('.pptx'),args.pandoc,args.reference,args.project_root,args.variants,args.backup,args.deck_json)
+    if args.engine=='pandoc' and not args.pandoc:parser.error('Pandoc unavailable; pass --pandoc /path/to/pandoc')
+    outputs,_=render(args.storyboard,args.output or args.storyboard.with_suffix('.pptx'),args.pandoc,args.reference,args.project_root,args.variants,args.backup,args.deck_json,args.engine)
     print('Outputs: '+', '.join(str(p) for p in outputs))
 
 if __name__=='__main__':main()

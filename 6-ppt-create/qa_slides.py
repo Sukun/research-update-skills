@@ -33,6 +33,8 @@ def structural_checks(prs):
         def flag(kind,shape=None,detail='',severity='warning'):
             issues.append(dict(slide_id=sid,kind=kind,shape=shape.name if shape is not None else None,detail=detail,severity=severity))
         pics=[s for s in slide.shapes if s.shape_type==13]
+        if slide.shapes.title is not None and not slide.shapes.title.text_frame.text.strip():
+            flag('title-missing',slide.shapes.title,'Empty slide title.')
         texts=[s for s in slide.shapes if s.has_text_frame and s.text.strip()]
         tags=[s for s in texts if metadata(s).get('role')=='section']
         body=[s for s in texts if s not in tags and s!=slide.shapes.title]
@@ -58,6 +60,10 @@ def structural_checks(prs):
                 flag('possible-text-overflow',sh,'Font-metric estimate only; inspect the rendered slide.')
             for pic in pics:
                 if overlap(sh,pic):flag('text-picture-overlap',sh,severity='error')
+        ttl=slide.shapes.title
+        if ttl is not None and ttl.text_frame.text.strip():
+            for shape in pics+body:
+                if overlap(ttl,shape):flag('title-overlap',shape,'Content overlaps the slide title.',severity='error')
         for i,a in enumerate(body):
             for b in body[i+1:]:
                 if overlap(a,b):flag('text-text-overlap',a,severity='error')
@@ -65,12 +71,13 @@ def structural_checks(prs):
             tag_boxes.append((sid,tuple(int(getattr(tag,a)) for a in ('left','top','width','height'))))
             for p in tag.text_frame.paragraphs:
                 for r in p.runs:
-                    try:
-                        white = str(r.font.color.rgb) == 'FFFFFF'
-                    except (AttributeError, ValueError):
-                        white = False
-                    if r.font.size is None or abs(r.font.size.pt-24)>.01 or r.font.bold is not True or not white:
-                        flag('section-style',tag,'Expected 24 pt bold white tag.',severity='error')
+                    if r.font.size is None or not 11.99<=r.font.size.pt<=14.01:
+                        flag('section-style',tag,'Expected a small (12-14 pt) top-right section label.',severity='error')
+            if tag.left+tag.width/2<prs.slide_width/2:
+                flag('section-style',tag,'Section label should sit in the top-right corner.',severity='error')
+            title=slide.shapes.title
+            if title is not None and title.has_text_frame and not title.text_frame.text.strip():
+                flag('title-hidden',title,'Slide has a section tag but an empty title.',severity='error')
         content=pics+body
         if content:
             occupied=sum(1 for y in range(30) for x in range(50)

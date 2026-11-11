@@ -190,7 +190,7 @@ Keep the first section short.
 
 The supporting detail may be extensive when the subject requires it, but do not duplicate material already maintained elsewhere.
 
-An existing L1/L2/L3 research topic record can serve as the area overview. Do not replace it with another format.
+An existing topic record (Summary/Evidence/Log; legacy L1/L2/L3 headings also count) can serve as the area overview. Do not replace it with another format. L1–L3 are reserved for the project outline; to build the question-based outline use `01-research-outline`.
 
 ### Research Overview Content Guidelines
 
@@ -200,7 +200,7 @@ Apply these guidelines when creating or revising research outlines, roadmaps, su
 
 - Lead with a short Quick View: research goal, key questions, current progress, major documented findings, and blockers or open decisions. Include only fields supported by available records; do not invent findings to fill a template.
 - Put supporting detail after the overview. Preserve useful detail and scientific meaning rather than shortening solely to meet a length target.
-- Use `#` for the document, `##` for topics, and `###` for subtopics in new ordinary Markdown overviews. Preserve useful established formats, including L1/L2/L3 topic records.
+- Use `#` for the document, `##` for topics, and `###` for subtopics in new ordinary Markdown overviews. Preserve useful established formats, including topic records (Summary/Evidence/Log).
 - Keep paragraphs and bullets focused on one main idea; avoid deep nesting. Use bold selectively for important findings, decisions, risks, and actions.
 - Add a compact plain-text concept map when relationships would otherwise be difficult to follow. It should clarify documented relationships, not imply untested causal links. For example:
 

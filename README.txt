@@ -6,10 +6,11 @@ Research Workflow Skills  (trigger with /<name>)
 4-mk_quickview ──(optional "share": --pptx)──► 6-ppt-create ──► PPTX (fast share)
         │  accumulate
         ▼  per topic
-4b-topic-record (00_README.md: L1 / L2 / L3)
+4b-topic-record (00_README.md: Summary / Evidence / Log)
+        │  declares `Outline: §n` ──► 01-research-outline → docs/outline.md
         │  accumulate topics
         ▼  per audience
-5-ppt-design (reads several L1s → cross-topic storyboard) ──► 6-ppt-create ──► PPTX
+5-ppt-design (reads several Summaries → cross-topic storyboard) ──► 6-ppt-create ──► PPTX
                                                                    │ hand-edited?
                                                                    ▼
                                                              7-ppt-to-5
@@ -21,12 +22,13 @@ Research Workflow Skills  (trigger with /<name>)
 3-conduct-plan      → scripts + outputs + clean research note (from readme instructions)
 4-report            → TECH_REPORT_DRAFT.md  or  PAPER_DRAFT.md
 4-mk_quickview      → quickview_<topic>_<dd-mm-yyyy>.md  (figure-first view of one run)
-                      + optional share: md_to_slides.py --render → storyboard + .pptx
+                      + optional share: md_to_slides.py --render (lives in 6-ppt-create) → storyboard + .pptx
                       (Mode B = former 5a: assemble_figures.py for an explicit
                       slides × figures arrangement of files in a directory)
-4b-topic-record     → <topic>/00_README.md  (per-topic ppt-style record: L1 summary slides,
-                      L2 evidence, L3 log; notes renamed 01_, 02_ … plan → results)
-5-ppt-design        → <topic>_<dd-mm-yyyy>.md  (cross-topic story; default source = L1 of topic records)
+4b-topic-record     → <topic>/00_README.md  (per-topic ppt-style record: Summary slides,
+                      Evidence, Log; notes renamed 01_, 02_ … plan → results)
+5-ppt-design        → <topic>_<dd-mm-yyyy>.md  (cross-topic story; default source = Summary of topic records)
+01-research-outline → docs/outline.md  (project L1/L2; L3 = topic records or Evidence Index + Gallery)
 5a-ppt-quick-assembly  REMOVED → use 4-mk_quickview share step, Mode B (recoverable from git history)
 6-ppt-create        → <topic>_<dd-mm-yyyy>.pptx  (rendered from storyboard via Pandoc)
 7-ppt-to-5          → deck.json + deck_revised.md  (read a hand-edited PPTX back into a
@@ -54,7 +56,7 @@ notes-organizer → notes/<topic>.md
 Write a paper	notes-organizer / 4b-topic-record → 4-report
 Give a talk	4b-topic-record (per topic) → 5-ppt-design → 6-ppt-create
 Share one run fast	4-mk_quickview → "share" (md_to_slides.py --render)
-Share one topic	md_to_slides.py <topic>/00_README.md --section L1 --render
+Share one topic	6-ppt-create/md_to_slides.py <topic>/00_README.md --section Summary --render
 Just arrange existing figures	4-mk_quickview share step, Mode B (assemble_figures.py → md_to_slides.py --render-only)
 Recover a hand-edited deck	6-ppt-create → [edit in PowerPoint] → 7-ppt-to-5
   (use --bootstrap once for a legacy deck that predates ID stamping)

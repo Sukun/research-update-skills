@@ -15,12 +15,13 @@ Produce a slide-by-slide storyboard markdown file from either:
 - **Mode A**: a rough user draft (free-form bullets, spoken description, or section titles)
 - **Mode B**: a pointer to one or more research notes files (reads and proposes a storyboard)
   - **Default Mode-B source: topic records.** When `<topic>/00_README.md` files exist (made by
-    `4b-topic-record`), read only their `# L1 · Summary` sections. They are already slide-shaped
+    `4b-topic-record`), read only their `# Summary` sections (accept legacy `# L1 · Summary`). They are already slide-shaped
     (one `##` per slide, a key figure, ≤ 3 bullets, finding-style titles). This skill's job is then only
-    the **cross-topic story**: which topics, their order, which L1 slides to cut or merge, the cover,
-    outline and summary slides, and section tags. Pull an L2 number or companion figure only when
-    a slide needs it, and cite the L2 section in speaker notes. Read full notes only if no topic record exists.
-  - A single topic needs no storyboard design: `4-mk_quickview/md_to_slides.py 00_README.md --section L1 --render`.
+    the **cross-topic story**: which topics, their order, which Summary slides to cut or merge, the cover,
+    outline and summary slides, and section tags. Pull an Evidence number or companion figure only when
+    a slide needs it, and cite the Evidence section in speaker notes. Read full notes only if no topic record exists.
+  - A single topic needs no storyboard design: `6-ppt-create/md_to_slides.py 00_README.md --section Summary --render`.
+  - A project deck may instead be derived from a project outline (`docs/outline.md`): one slide per L2, the L1 as a small corner label, slide text copied verbatim from the outline (see `01-research-outline`).
 
 Both modes accepted. The output is a human-readable `.md` storyboard with explicit layout annotations that `6-ppt-create` (skill 6) reads mechanically to produce the final PPTX.
 
@@ -379,7 +380,7 @@ Write storyboards **with Pandoc column syntax** so figures are visible as inline
 
 **If Mode B (notes file provided):**
 
-0. If the sources are topic records, extract their `# L1` sections first and apply the line-count check to those sections, not the whole files.
+0. If the sources are topic records, extract their `# Summary` (or legacy `# L1`) sections first and apply the line-count check to those sections, not the whole files.
 1. Check line count: `wc -l <notes_file>`. If > 150 lines, ask the user: "Notes file is ~N lines — read in full to construct the storyboard? (yes / no — paste a summary instead)". Proceed only on yes.
 2. Read the specified notes file(s).
 3. Identify key findings, figure references, and thematic groupings.
