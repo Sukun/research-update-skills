@@ -2,6 +2,8 @@
 """Render one approved storyboard with the bundled static postprocessor."""
 import argparse
 import ast
+import hashlib
+import math
 import json
 import re
 import shutil
@@ -11,9 +13,10 @@ from pathlib import Path
 from urllib.parse import unquote
 
 SKILL = Path(__file__).resolve().parent
-LAYOUTS = {'text-only', 'single', 'figure-dominant', 'annotated', 'vstack-2',
+LAYOUTS = {'custom', 'text-only', 'single', 'figure-dominant', 'annotated', 'vstack-2',
            'hstack-2', 'vstack-3', 'hstack-3', 'focus-context', 'grid-2x2',
            'figure-right-text-left', 'figure-pair-right-text-left',
+           'figure-left-text-right', 'figure-pair-left-text-right',
            'vertical-balanced-text', 'large-text-summary', 'table'}
 VARIANTS = {'short-keep', 'short-only', 'full-only', 'backup'}
 
@@ -216,12 +219,79 @@ def derive_variant(source, slides, variant, output, backup='exclude'):
     return [sid for sid in ids if sid in selected]+[sid for sid in ids if sid in backups]
 
 
-def render(storyboard, output, pandoc, reference=None, project_root=None, variants=(), backup='exclude'):
+def find_deck_json(storyboard, explicit=None):
+    """Only discover an unambiguous sibling; never guess across directories."""
+    if explicit:
+        path = Path(explicit).resolve()
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        return path
+    storyboard = Path(storyboard).resolve()
+    candidates = [storyboard.with_suffix('.deck.json')]
+    if storyboard.stem.endswith('.pptx'):
+        candidates.append(storyboard.with_name(storyboard.stem[:-5] + '.deck.json'))
+    existing = list(dict.fromkeys(p for p in candidates if p.is_file()))
+    if len(existing) > 1:
+        raise ValueError('Multiple sibling deck.json files; choose with --deck-json')
+    return existing[0] if existing else None
+
+
+def restore_recorded_geometry(pptx, slides, deck_json):
+    """Restore uniquely matched figure geometry after generic postprocessing."""
+    from pptx import Presentation
+    deck = json.loads(Path(deck_json).read_text())
+    if deck.get('schema_version') != 1 or not isinstance(deck.get('slides'), list):
+        raise ValueError('Unsupported or invalid deck.json schema')
+    entries = deck['slides']
+    ids = [x.get('slide_id') for x in entries]
+    if any(not sid for sid in ids) or len(ids) != len(set(ids)):
+        raise ValueError('deck.json has missing or duplicate slide IDs')
+    by_id = dict(zip(ids, entries))
+    prs = Presentation(pptx)
+    if len(prs.slides) != len(slides):
+        raise ValueError('Deck and storyboard slide count differ')
+    count = 0
+    for slide, story in zip(prs.slides, slides):
+        sid = story['id']
+        if story.get('generated_id'):
+            print('WARNING {}: generated slide ID; recorded geometry not applied'.format(sid))
+            continue
+        entry = by_id.get(sid)
+        if entry is None:
+            continue
+        pics = [sh for sh in slide.shapes if sh.shape_type == 13]
+        figures = entry.get('figures', [])
+        for fig in figures:
+            sha = fig.get('sha256')
+            matches = [p for p in pics if hashlib.sha256(p.image.blob).hexdigest() == sha] if sha else []
+            if len(matches) != 1 or sum(f.get('sha256') == sha for f in figures) != 1:
+                print('WARNING {}: figure {} could not be uniquely matched; using generic layout'.format(sid, fig.get('figure_id')))
+                continue
+            values = [fig.get(k) for k in ('x', 'y', 'w', 'h')]
+            if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in values) or values[2] <= 0 or values[3] <= 0:
+                raise ValueError('Invalid recorded geometry for {} {}'.format(sid, fig.get('figure_id')))
+            crop = fig.get('crop', [0, 0, 0, 0])
+            if not isinstance(crop, list) or len(crop) != 4 or not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and 0 <= v < 1 for v in crop) or crop[0]+crop[1] >= 1 or crop[2]+crop[3] >= 1:
+                raise ValueError('Invalid recorded crop for {} {}'.format(sid, fig.get('figure_id')))
+            pic = matches[0]
+            pic.left, pic.top = round(values[0]*prs.slide_width), round(values[1]*prs.slide_height)
+            pic.width, pic.height = round(values[2]*prs.slide_width), round(values[3]*prs.slide_height)
+            pic.crop_left, pic.crop_right, pic.crop_top, pic.crop_bottom = crop
+            count += 1
+        if figures:
+            print('WARNING {}: deck.json does not record text-box geometry; inspect text and figure overlap'.format(sid))
+    prs.save(pptx)
+    print('Restored {} figure geometries from {}'.format(count, deck_json))
+    return count
+
+
+def render(storyboard, output, pandoc, reference=None, project_root=None, variants=(), backup='exclude', deck_json=None):
     from pptx import Presentation
     storyboard=Path(storyboard).resolve();output=Path(output).resolve()
     if output==storyboard or output.suffix.lower()!='.pptx':
         raise ValueError('Output must be a separate PPTX file')
     slides=parse_storyboard(storyboard)
+    deck_json=find_deck_json(storyboard, deck_json)
     if variants and any(s.get("generated_id") for s in slides):
         raise ValueError("Variants require explicit stable slide-id comments before rendering")
     if reference is None:
@@ -234,7 +304,7 @@ def render(storyboard, output, pandoc, reference=None, project_root=None, varian
     for s in slides:
         block=s['block']
         # Single Pandoc anchor; the template rebuilds only the picture region.
-        if s['layout'] in ('hstack-3','vstack-3','figure-pair-right-text-left'):
+        if s['layout'] in ('hstack-3','vstack-3','figure-pair-right-text-left','figure-pair-left-text-right'):
             matches=list(re.finditer(r'!\[[^\]]*\]\([^\n]+?\)(?:\{[^}]*\})?',block))
             for m in reversed(matches[1:]):block=block[:m.start()]+block[m.end():]
         block=re.sub(r'(?m)^Note:\s*\n(.*?)(?=\n---|\Z)',r'::: notes\n\1\n:::\n',block,flags=re.S)
@@ -259,6 +329,8 @@ def render(storyboard, output, pandoc, reference=None, project_root=None, varian
     processor=output.with_suffix('.postprocess.py')
     processor.write_text(fill_template(SKILL/'postprocess_template.py',values))
     subprocess.run([sys.executable,str(processor)],check=True)
+    if deck_json:
+        restore_recorded_geometry(output, slides, deck_json)
     manifest=output.with_suffix('.slides.json')
     manifest.write_text(json.dumps([{k:v for k,v in s.items() if k!='block'} for s in slides],indent=2)+'\n')
     outputs=[output]
@@ -274,12 +346,13 @@ def main():
     parser.add_argument('-o','--output',type=Path)
     parser.add_argument('--pandoc',default=shutil.which('pandoc'))
     parser.add_argument('--reference',type=Path)
+    parser.add_argument('--deck-json',type=Path,help='Restore recorded figure geometry from this deck.json (otherwise discover a matching sibling)')
     parser.add_argument('--project-root',type=Path)
     parser.add_argument('--variants',nargs='+',choices=['short','full'],default=[])
     parser.add_argument('--backup',choices=['exclude','append','hidden'],default='exclude')
     args=parser.parse_args()
     if not args.pandoc:parser.error('Pandoc unavailable; pass --pandoc /path/to/pandoc')
-    outputs,_=render(args.storyboard,args.output or args.storyboard.with_suffix('.pptx'),args.pandoc,args.reference,args.project_root,args.variants,args.backup)
+    outputs,_=render(args.storyboard,args.output or args.storyboard.with_suffix('.pptx'),args.pandoc,args.reference,args.project_root,args.variants,args.backup,args.deck_json)
     print('Outputs: '+', '.join(str(p) for p in outputs))
 
 if __name__=='__main__':main()

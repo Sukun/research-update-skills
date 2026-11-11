@@ -4,6 +4,10 @@ description: "Create a topic-and-date-named slide storyboard Markdown file from 
 ---
 # ppt_design — Slide Storyboard Skill
 
+## Presentation preferences
+
+Before producing output, read the user's presentation preferences at `/Users/tg932198@reading.ac.uk/Documents/GLORAN_AMOC_paper/preferences.md`. Apply them across projects; explicit instructions for the current task take priority.
+
 ## Purpose
 
 Produce a slide-by-slide storyboard markdown file from either:

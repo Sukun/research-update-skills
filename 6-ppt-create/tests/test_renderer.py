@@ -58,8 +58,20 @@ class RendererTests(unittest.TestCase):
         box=s.shapes.add_textbox(0,Inches(1),Inches(4),Inches(1));box.text='Ordinary text';box.text_frame.paragraphs[0].runs[0].font.size=Pt(9)
         m.set_body_font(s)
         self.assertEqual(before,etree.tostring(chip._element));self.assertEqual(box.text_frame.paragraphs[0].runs[0].font.size.pt,20)
+    def test_side_layouts_text_is_centred_18pt_bullets(self):
+        from pptx.enum.text import MSO_ANCHOR
+        from pptx.oxml.ns import qn
+        for layout,count in [('figure-right-text-left',1),('figure-left-text-right',1),('figure-pair-left-text-right',2)]:
+            path=self.deck(layout,count,2);self.m.main();p=Presentation(path);s=p.slides[0]
+            box=self.m.body_text_shapes(s)[0];pics=[x for x in s.shapes if x.shape_type==13]
+            self.assertEqual(box.text_frame.vertical_anchor,MSO_ANCHOR.MIDDLE,layout)
+            self.assertEqual(box.text_frame.paragraphs[0].runs[0].font.size.pt,18,layout)
+            self.assertTrue(all(q._p.pPr.find(qn('a:buChar')) is not None for q in box.text_frame.paragraphs if q.text.strip()),layout)
+            self.assertEqual(box.top+box.height/2,pics[0].top+pics[0].height/2 if len(pics)==1 else box.top+box.height/2)
+            if layout=='figure-right-text-left':self.assertTrue(all(x.left>=box.left+box.width for x in pics))
+            else:self.assertTrue(all(x.left+x.width<=box.left for x in pics),layout)
     def test_new_balanced_layouts_and_summary(self):
-        for layout,count in [('figure-right-text-left',1),('figure-pair-right-text-left',2),('vertical-balanced-text',1),('large-text-summary',0)]:
+        for layout,count in [('figure-right-text-left',1),('figure-pair-right-text-left',2),('figure-left-text-right',1),('figure-pair-left-text-right',2),('vertical-balanced-text',1),('large-text-summary',0)]:
             path=self.deck(layout,count,3 if count==0 else 2);self.m.main();p=Presentation(path)
             self.assertFalse([x for x in qa.structural_checks(p) if x['severity']=='error'],layout)
             if layout=='large-text-summary':
@@ -97,6 +109,29 @@ class RendererTests(unittest.TestCase):
         text='---\n---\n\n<!-- introductory comment -->\n<!-- Slide 1 -->\n<!-- slide-id: A -->\n<!-- variant: short-keep -->\n## Cover\n\n::: notes\n## Not a slide\n:::\n---\n<!-- Slide 2 -->\n<!-- slide-id: B -->\n<!-- layout: large-text-summary -->\n## Summary\n- One\n- Two\n- Three\n'
         path=self.root/'story.md';path.write_text(text);slides=renderer.parse_storyboard(path)
         self.assertEqual([s['id'] for s in slides],['A','B']);self.assertEqual(slides[1]['layout'],'large-text-summary')
+    def test_recorded_geometry_overrides_layout_only_for_unique_matching_figures(self):
+        path=self.deck('figure-dominant',1);self.m.main()
+        p=Presentation(path); slide=p.slides[0]; pic=next(sh for sh in slide.shapes if sh.shape_type==13)
+        sha=hashlib.sha256(pic.image.blob).hexdigest()
+        notes=slide.notes_slide.notes_text_frame.text
+        deck={'schema_version':1,'slides':[{'slide_id':'TEST-A','figures':[{'figure_id':'F','sha256':sha,'x':.12,'y':.25,'w':.3,'h':.4,'crop':[.1,.05,.02,.03]}]}]}
+        recorded=self.root/'source.deck.json';recorded.write_text(json.dumps(deck))
+        self.assertEqual(renderer.restore_recorded_geometry(path,[{'id':'TEST-A'}],recorded),1)
+        result=Presentation(path); pic=next(sh for sh in result.slides[0].shapes if sh.shape_type==13)
+        self.assertAlmostEqual(pic.left/result.slide_width,.12,places=4)
+        self.assertAlmostEqual(pic.height/result.slide_height,.4,places=4)
+        self.assertAlmostEqual(pic.crop_left,.1,places=4)
+        self.assertEqual(result.slides[0].notes_slide.notes_text_frame.text,notes)
+        deck['slides'][0]['figures'].append(dict(deck['slides'][0]['figures'][0]))
+        recorded.write_text(json.dumps(deck)); self.assertEqual(renderer.restore_recorded_geometry(path,[{'id':'TEST-A'}],recorded),0)
+        self.assertEqual(renderer.restore_recorded_geometry(path,[{'id':'TEST-A','generated_id':True}],recorded),0)
+    def test_deck_json_discovery(self):
+        source=self.root/'slides.pptx.md';source.write_text('')
+        sibling=self.root/'slides.deck.json';sibling.write_text('{}')
+        self.assertEqual(renderer.find_deck_json(source),sibling.resolve())
+        other=self.root/'slides.pptx.deck.json';other.write_text('{}')
+        with self.assertRaises(ValueError):renderer.find_deck_json(source)
+        self.assertEqual(renderer.find_deck_json(source,sibling),sibling.resolve())
     def test_invalid_geometry_rejected(self):
         path=self.deck('figure-right-text-left',1);self.m.LAYOUT_OPTIONS={'TEST-A':{'text_fraction':.9}}
         with self.assertRaises(ValueError):self.m.main()

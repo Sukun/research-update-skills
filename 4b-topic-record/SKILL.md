@@ -5,6 +5,10 @@ description: "Summarise accumulated notes, quickviews and reports on ONE researc
 
 # Topic Record
 
+## Presentation preferences
+
+Before producing output, read the user's presentation preferences at `/Users/tg932198@reading.ac.uk/Documents/GLORAN_AMOC_paper/preferences.md`. Apply them across projects; explicit instructions for the current task take priority.
+
 ## Purpose
 
 One file per research topic that can be reviewed **like a short deck**: read L1 in two

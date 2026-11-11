@@ -606,7 +606,37 @@ def write_figure_registry(registry, pptx_path):
 
 
 BALANCED_LAYOUTS = ("figure-right-text-left", "figure-pair-right-text-left",
+                    "figure-left-text-right", "figure-pair-left-text-right",
                     "vertical-balanced-text", "large-text-summary")
+# layout -> (picture count, text on the right?). Side layouts: 18 pt bullets,
+# text box and its text both vertically centred against the figure region.
+SIDE_LAYOUTS = {
+    "figure-right-text-left": (1, False), "figure-pair-right-text-left": (2, False),
+    "figure-left-text-right": (1, True), "figure-pair-left-text-right": (2, True),
+}
+SIDE_FONT_PT = 18
+
+
+def _ensure_bullets(shape):
+    """Give every non-empty paragraph an explicit bullet, keeping existing ones."""
+    from pptx.oxml.ns import qn
+    from lxml import etree
+    for para in shape.text_frame.paragraphs:
+        if not para.text.strip():
+            continue
+        pPr = para._p.get_or_add_pPr()
+        if any(pPr.find(qn(tag)) is not None for tag in ("a:buNone", "a:buChar", "a:buAutoNum", "a:buBlip")):
+            continue
+        pPr.set("marL", "285750")
+        pPr.set("indent", "-285750")
+        bullet = etree.SubElement(pPr, qn("a:buChar"))
+        bullet.set("char", "•")
+        # Schema order: bullet elements precede tabLst/defRPr/extLst.
+        for tag in ("a:tabLst", "a:defRPr", "a:extLst"):
+            later = pPr.find(qn(tag))
+            if later is not None:
+                later.addprevious(bullet)
+                break
 
 
 def _options(idx):
@@ -696,17 +726,35 @@ def apply_balanced_layout(slide, idx, layout, slide_w, slide_h):
     pics = [sh for sh in slide.shapes if sh.shape_type == 13]
     texts = body_text_shapes(slide)
     sid = SLIDE_IDS.get(idx, "slide-{}".format(idx + 1))
-    font = options.get("font_pt", 28 if layout == "large-text-summary" else 20)
+    default_font = (28 if layout == "large-text-summary" else
+                    SIDE_FONT_PT if layout in SIDE_LAYOUTS else 20)
+    font = options.get("font_pt", default_font)
     for sh in texts:
         _set_text_shape_font(sh, font)
-    if layout in ("figure-right-text-left", "figure-pair-right-text-left"):
-        expected = 1 if layout == "figure-right-text-left" else 2
+    if layout in SIDE_LAYOUTS:
+        expected, text_right = SIDE_LAYOUTS[layout]
         if len(pics) != expected:
             raise ValueError("{} requires {} pictures; got {}".format(layout, expected, len(pics)))
         text_w = int(width * options.get("text_fraction", 0.30))
-        _place_text_group(texts, margin, top, text_w, height, font, sid)
-        fig_left = margin + text_w + gap
-        cell_w = (slide_w - margin - fig_left - gap * (len(pics)-1)) / len(pics)
+        text_left = slide_w - margin - text_w if text_right else margin
+        if len(texts) == 1:
+            # One box spans the figure region, so the box and its anchored text
+            # are both exactly centred whatever the real rendered text height is.
+            if _estimated_text_height(texts[0], text_w, font) > height:
+                print("QA WARNING {}: text may overflow; enlarge the region or revise the storyboard.".format(sid))
+            _set_box(texts[0], text_left, top, text_w, height)
+        else:
+            _place_text_group(texts, text_left, top, text_w, height, font, sid)
+        for sh in texts:
+            tf = sh.text_frame
+            tf.word_wrap = True
+            tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+            _ensure_bullets(sh)
+        if text_right:
+            fig_left, fig_right = margin, text_left - gap
+        else:
+            fig_left, fig_right = text_left + text_w + gap, slide_w - margin
+        cell_w = (fig_right - fig_left - gap * (len(pics)-1)) / len(pics)
         for i, pic in enumerate(pics):
             fit_picture(pic, fig_left + i * (cell_w + gap), top, cell_w, height)
     elif layout == "vertical-balanced-text":
@@ -766,7 +814,7 @@ def main():
         fig_path = FIGURES.get(idx)
         layout = next((name for name in BALANCED_LAYOUTS if idx in LAYOUT_MAP.get(name, [])), None)
         if layout:
-            if layout == "figure-pair-right-text-left":
+            if layout in ("figure-pair-right-text-left", "figure-pair-left-text-right"):
                 from collections import Counter
                 existing = Counter(_sha256_bytes(pic.image.blob) for pic in slide.shapes if pic.shape_type == 13)
                 for source in (fig_path if isinstance(fig_path, list) else []):

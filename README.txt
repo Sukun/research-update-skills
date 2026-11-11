@@ -27,7 +27,7 @@ Research Workflow Skills  (trigger with /<name>)
 4b-topic-record     → <topic>/00_README.md  (per-topic ppt-style record: L1 summary slides,
                       L2 evidence, L3 log; notes renamed 01_, 02_ … plan → results)
 5-ppt-design        → <topic>_<dd-mm-yyyy>.md  (cross-topic story; default source = L1 of topic records)
-5a-ppt-quick-assembly  DEPRECATED 2026-09-29 → use 4-mk_quickview share step, Mode B
+5a-ppt-quick-assembly  REMOVED → use 4-mk_quickview share step, Mode B (recoverable from git history)
 6-ppt-create        → <topic>_<dd-mm-yyyy>.pptx  (rendered from storyboard via Pandoc)
 7-ppt-to-5          → deck.json + deck_revised.md  (read a hand-edited PPTX back into a
                       storyboard; closes the Markdown <-> PowerPoint loop)
