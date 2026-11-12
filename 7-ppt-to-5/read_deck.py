@@ -5,6 +5,8 @@ Revise (stamped deck from 6-ppt-create):
   python read_deck.py EDITED.pptx --storyboard NAME.md [--project-root DIR]
       text edits are merged into NAME.md (old copy kept as NAME.md.bak);
       positions, sizes, crops and font sizes go to NAME.layout.json.
+      Newer edit wins: a slide edited only in the deck takes the deck text, edited only in
+      the storyboard keeps it, edited in both takes the newer file's version.
   --layout-only keeps NAME.md as it is; --dry-run only reports.
 
 Bootstrap (legacy unstamped deck, once):
@@ -369,8 +371,6 @@ def main():
                     help="import a legacy unstamped deck: mint fresh ids, deck is the truth")
     ap.add_argument("--layout-only", action="store_true",
                     help="record positions only; leave the storyboard text untouched")
-    ap.add_argument("--force", action="store_true",
-                    help="merge even though the storyboard changed after the last render")
     ap.add_argument("--dry-run", action="store_true", help="report what would change; write nothing")
     ap.add_argument("--json", help="also dump the deck state (text + figures) to this file, for debugging")
     args = ap.parse_args()
@@ -402,19 +402,13 @@ def main():
     md = Path(args.storyboard).resolve()
     layout_path = md.with_suffix(".layout.json")
     prior = layout_record.load(layout_path) if layout_path.is_file() else None
+    md_newer = md.stat().st_mtime > pptx.stat().st_mtime
     if prior is None:
-        print("NOTE: no layout record yet; cannot tell whether the storyboard changed after the render")
-    else:
-        if prior.get("pptx_sha256") == layout_record.sha256_file(pptx):
-            print("NOTE: the deck is unchanged since its layout was last recorded")
-        story_sha = prior.get("storyboard_sha256")
-        if (story_sha and story_sha != layout_record.sha256_file(md)
-                and not (args.force or args.layout_only)):
-            print("STOP: the storyboard changed after this deck was rendered, so text edited in both\n"
-                  "places would collide. Re-render the storyboard and redo the PowerPoint edits, or pass\n"
-                  "--layout-only (keep the storyboard text, take the positions) or --force (deck text wins).",
-                  file=sys.stderr)
-            return 2
+        print("NOTE: no layout record yet; every deck slide counts as edited in the deck")
+    elif prior.get("pptx_sha256") == layout_record.sha256_file(pptx):
+        print("NOTE: the deck is unchanged since its layout was last recorded")
+    print("newer file: " + ("storyboard" if md_newer else "deck")
+          + " (wins for slides edited in both places)")
 
     deck = read(pptx, root, False, (prior or {}).get("unresolved"), md.parent / "assets" / "unresolved")
     report(deck, False)
@@ -422,7 +416,10 @@ def main():
         Path(args.json).write_text(json.dumps(deck, indent=2, ensure_ascii=False) + "\n")
 
     if not args.layout_only:
-        text, changes = merge_storyboard.merge(md, deck, root)
+        current = layout_record.record(pptx)
+        for entry, s in zip(current["slides"], deck["slides"]):
+            entry["slide_id"] = s["slide_id"]
+        text, changes = merge_storyboard.merge(md, deck, root, prior, current, md_newer)
         for line in changes:
             print(line)
         if not args.dry_run and text != md.read_text():
@@ -434,7 +431,9 @@ def main():
             print("storyboard text unchanged")
     if args.dry_run:
         return 0
-    layout = layout_record.record(pptx, md, prior)
+    import render_storyboard
+    blocks = {s["id"]: s["block"] for s in render_storyboard.parse_storyboard(md, root)}
+    layout = layout_record.record(pptx, md, prior, blocks)
     layout["unresolved"] = deck["unresolved"]
     # Read slide ids the same way as above, so duplicates and positional slides line up.
     for entry, s in zip(layout["slides"], deck["slides"]):

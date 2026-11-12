@@ -332,7 +332,7 @@ def render(storyboard, output, pandoc=None, reference=None, project_root=None, v
         if target.is_file():
             try:prior=layout_record.load(target)
             except ValueError:prior=None
-        layout_record.write(layout_record.record(output,storyboard,prior),target)
+        layout_record.write(layout_record.record(output,storyboard,prior,{s['id']:s['block'] for s in slides if not s.get('generated_id')}),target)
         print('Layout recorded: '+str(target))
     outputs=[output]
     for variant in variants:

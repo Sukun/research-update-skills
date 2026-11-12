@@ -247,86 +247,159 @@ def new_storyboard(deck, md, root):
 
 # ------------------------------------------------------------ merge
 
-def merge(md, deck, root=None):
-    """Return (new storyboard text, [change lines])."""
+def _from_deck(story, d, sid, by_id, md, root):
+    """Rewrite one storyboard block with the deck's title, body, notes and figures where they differ."""
+    lines = story["block"].rstrip("\n").splitlines()
+    what = []
+    if story is not by_id.get(sid):
+        set_annotation(lines, "slide-id", sid)
+        what.append(f"duplicate of {story['id']}")
+    elif story.get("generated_id"):
+        set_annotation(lines, "slide-id", sid)
+
+    # title (a heading is one line: extra lines typed into the title box join the body)
+    tparts = [t.strip() for t in (d.get("title") or "").splitlines() if t.strip()]
+    extra = [(0, t) for t in tparts[1:]]
+    if tparts and squash(tparts[0]) != plain(story["title"]):
+        set_title(lines, tparts[0])
+        what.append("title")
+    if extra:
+        what.append(f"{len(extra)} extra title line(s) kept as body text")
+
+    # body (+ bullets that figure-full-width moved to Notes, + caption)
+    content = build_pptx.split_block(story["block"], [])
+    md_body = [plain(p["text"]) for p in content["paragraphs"]]
+    spill, deck_notes = split_spill(d.get("notes"))
+    deck_paras = extra + list(d.get("takeaway_paras") or []) + [(0, t) for t in spill]
+    deck_body = [plain(t) for _, t in deck_paras]
+    if sorted(md_body) != sorted(deck_body) and " ".join(md_body) != " ".join(deck_body):
+        set_body(lines, deck_paras)
+        what.append("body")
+
+    # notes
+    md_notes = squash(convert_math("\n".join(content["notes"]), []))
+    if squash(deck_notes) != md_notes:
+        set_notes(lines, deck_notes)
+        what.append("notes")
+
+    # figures
+    md_sha = sorted(sha_file(p) for p in story["paths"])
+    deck_sha = sorted(f["sha256"] for f in d.get("figures", []))
+    if md_sha != deck_sha:
+        refs, missing = [], []
+        for f in sorted(d.get("figures", []), key=lambda f: f["z"]):
+            p = deck_fig_path(f, root)
+            if p is None or not Path(p).is_file():
+                missing.append(f["figure_id"])
+                continue
+            refs.append(fig_ref(p, md.parent, root))
+            if f.get("resolved_by") == "unresolved":
+                lines.insert(_heading_index(lines) + 1,
+                             f"<!-- unresolved-figure: {f['figure_id']} sha256={f['sha256'][:16]} origin=manual-insert -->")
+        layout = story["layout"]
+        if len(refs) != len(story["paths"]):
+            layout = d.get("layout") if d.get("layout") in LAYOUTS else "custom"
+        set_figures(lines, refs, layout)
+        what.append("figures" + (f" (no file for {', '.join(missing)})" if missing else ""))
+
+    return tidy(lines), what
+
+
+def merge(md, deck, root=None, prior=None, current=None, md_newer=False):
+    """Return (new storyboard text, [change lines]).
+
+    Newer edit wins, per slide. `prior` is the layout recorded at the last render or read;
+    `current` is the layout of the deck now. A slide edited only in the deck takes the deck's
+    text; edited only in the storyboard keeps the storyboard's; edited in both takes the side
+    whose file is newer (`md_newer`). Slide order and membership follow the same rule.
+    Without `prior` every deck slide counts as edited in the deck."""
+    from layout_record import block_sha
     md = Path(md).resolve()
     text = md.read_text()
     slides = render_storyboard.parse_storyboard(md, root)
     first = text.find(slides[0]["block"])
     preamble = text[:first] if first > 0 else ""
     by_id = {s["id"]: s for s in slides}
-    changes, blocks = [], []
+    deck_by = {d["slide_id"]: d for d in deck["slides"]}
+    rec = {s["slide_id"]: s for s in (prior or {}).get("slides", [])}
+    cur = {s["slide_id"]: s for s in (current or {}).get("slides", [])}
+    file_changed = bool(prior) and prior.get("storyboard_sha256") not in (None, sha_file(md))
+    newer = "storyboard" if md_newer else "deck"
 
-    for d in deck["slides"]:
-        sid = d["slide_id"]
-        story = by_id.get(sid) or by_id.get(d.get("duplicate_of"))
+    def md_changed(sid):
+        r = rec.get(sid)
+        if not prior or sid not in by_id:
+            return False
+        if r is None:
+            return True
+        if "md_sha" in r:
+            return block_sha(by_id[sid]["block"]) != r["md_sha"]
+        return file_changed
+
+    def deck_changed(sid):
+        r, c = rec.get(sid), cur.get(sid)
+        if not prior or r is None or c is None:
+            return True
+        keys = [k for k in ("text_sig", "notes_sig", "figures") if r.get(k) is not None]
+        return any(r[k] != c.get(k) for k in keys)
+
+    rec_order = [s["slide_id"] for s in sorted(rec.values(), key=lambda s: s.get("order", 0))]
+    deck_order = [d["slide_id"] for d in deck["slides"]]
+    md_order = [s["id"] for s in slides]
+    deck_struct = not prior or deck_order != rec_order
+    md_struct = bool(prior) and md_order != rec_order
+    use_deck_order = deck_struct and not (md_struct and md_newer)
+    changes = []
+    if deck_struct and md_struct:
+        changes.append(f"slide order or set changed in both; the {newer} is newer and wins")
+    if use_deck_order:
+        order = list(deck_order)
+        if prior:  # slides added in the storyboard since the last render stay, after their predecessor
+            for k, sid in enumerate(md_order):
+                if sid not in rec and sid not in order:
+                    prev = next((x for x in reversed(md_order[:k]) if x in order), None)
+                    order.insert(order.index(prev) + 1 if prev else 0, sid)
+    else:
+        order = list(md_order)
+
+    blocks = []
+    for sid in order:
+        story, d = by_id.get(sid), deck_by.get(sid)
         if story is None:
-            blocks.append(new_block(d, md.parent, root))
-            changes.append(f"{sid}: new slide in the deck, added")
+            base = by_id.get(d.get("duplicate_of"))
+            if base is None:
+                blocks.append(new_block(d, md.parent, root))
+                changes.append(f"{sid}: new slide in the deck, added")
+            else:
+                lines, what = _from_deck(base, d, sid, by_id, md, root)
+                blocks.append(lines)
+                changes.append(f"{sid}: " + ", ".join(what))
             continue
-        lines = story["block"].rstrip("\n").splitlines()
-        what = []
-        if story is not by_id.get(sid):
-            set_annotation(lines, "slide-id", sid)
-            what.append(f"duplicate of {story['id']}")
-        elif story.get("generated_id"):
-            set_annotation(lines, "slide-id", sid)
-
-        # title (a heading is one line: extra lines typed into the title box join the body)
-        tparts = [t.strip() for t in (d.get("title") or "").splitlines() if t.strip()]
-        extra = [(0, t) for t in tparts[1:]]
-        if tparts and squash(tparts[0]) != plain(story["title"]):
-            set_title(lines, tparts[0])
-            what.append("title")
-        if extra:
-            what.append(f"{len(extra)} extra title line(s) kept as body text")
-
-        # body (+ bullets that figure-full-width moved to Notes, + caption)
-        content = build_pptx.split_block(story["block"], [])
-        md_body = [plain(p["text"]) for p in content["paragraphs"]]
-        spill, deck_notes = split_spill(d.get("notes"))
-        deck_paras = extra + list(d.get("takeaway_paras") or []) + [(0, t) for t in spill]
-        deck_body = [plain(t) for _, t in deck_paras]
-        if sorted(md_body) != sorted(deck_body) and " ".join(md_body) != " ".join(deck_body):
-            set_body(lines, deck_paras)
-            what.append("body")
-
-        # notes
-        md_notes = squash(convert_math("\n".join(content["notes"]), []))
-        if squash(deck_notes) != md_notes:
-            set_notes(lines, deck_notes)
-            what.append("notes")
-
-        # figures
-        md_sha = sorted(sha_file(p) for p in story["paths"])
-        deck_sha = sorted(f["sha256"] for f in d.get("figures", []))
-        if md_sha != deck_sha:
-            refs, missing = [], []
-            for f in sorted(d.get("figures", []), key=lambda f: f["z"]):
-                p = deck_fig_path(f, root)
-                if p is None or not Path(p).is_file():
-                    missing.append(f["figure_id"])
-                    continue
-                refs.append(fig_ref(p, md.parent, root))
-                if f.get("resolved_by") == "unresolved":
-                    lines.insert(_heading_index(lines) + 1,
-                                 f"<!-- unresolved-figure: {f['figure_id']} sha256={f['sha256'][:16]} origin=manual-insert -->")
-            layout = story["layout"]
-            if len(refs) != len(story["paths"]):
-                layout = d.get("layout") if d.get("layout") in LAYOUTS else "custom"
-            set_figures(lines, refs, layout)
-            what.append("figures" + (f" (no file for {', '.join(missing)})" if missing else ""))
-
-        blocks.append(tidy(lines))
+        if d is None:
+            blocks.append(tidy(story["block"].rstrip("\n").splitlines()))
+            if sid not in rec:
+                changes.append(f"{sid}: new in the storyboard, kept")
+            continue
+        mc, dc = md_changed(sid), deck_changed(sid)
+        if dc and not (mc and md_newer):
+            lines, what = _from_deck(story, d, sid, by_id, md, root)
+            if mc and what:
+                what.append("also edited in the storyboard; the deck is newer and wins")
+        else:
+            lines, what = tidy(story["block"].rstrip("\n").splitlines()), []
+            if dc and mc:
+                what = ["edited in both; the storyboard is newer and wins"]
+        blocks.append(lines)
         if what:
             changes.append(f"{sid}: " + ", ".join(what))
 
-    kept = {d["slide_id"] for d in deck["slides"]} | {d.get("duplicate_of") for d in deck["slides"]}
-    for s in slides:
-        if s["id"] not in kept:
-            changes.append(f"{s['id']}: deleted in the deck, removed")
-    order_md = [s["id"] for s in slides if s["id"] in kept]
-    order_deck = [d["slide_id"] for d in deck["slides"] if d["slide_id"] in by_id]
-    if order_md != order_deck:
+    for sid in md_order:
+        if sid not in order:
+            changes.append(f"{sid}: deleted in the deck, removed")
+    for sid in deck_order:
+        if sid not in order:
+            changes.append(f"{sid}: in the deck only; the storyboard is newer, not added")
+    kept_md = [x for x in md_order if x in order]
+    if use_deck_order and kept_md != [x for x in order if x in by_id]:
         changes.append("slide order changed")
     return assemble(preamble, blocks), changes

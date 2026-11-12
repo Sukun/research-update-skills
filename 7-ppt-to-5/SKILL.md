@@ -38,10 +38,12 @@ $PY $SKILL_DIR/read_deck.py EDITED.pptx --storyboard NAME.md --project-root /abs
   `<id>-d1`. Bold typed in PowerPoint comes back as `**…**`. Extra lines typed into a title box move
   to the top of the body (a heading is one line).
 - **Positions** → `NAME.layout.json`, recorded from the edited deck (see 6-ppt-create, "Layout file").
-- **Conflict guard.** The layout file holds the storyboard hash from the last render. If `NAME.md`
-  changed since then, the script stops (exit 2): text edited in both places would collide. Then either
-  `--layout-only` (keep the storyboard text, take the positions) or `--force` (deck text wins).
-  Rule for the author: after editing the PPTX, run this skill before touching the `.md`.
+- **Newer edit wins.** The layout file holds, per slide, the storyboard hash and the deck text
+  hash from the last render or read. A slide edited only in PowerPoint takes the deck text; edited
+  only in the storyboard keeps the storyboard text; edited in both takes the version from the file
+  with the newer modification time, since that is the author's latest intent. Slide order and
+  membership follow the same rule. No flag is needed; `--layout-only` keeps all storyboard text.
+  Every decision is listed per slide, and `NAME.md.bak` holds the previous storyboard.
 - Then re-render with `/6-ppt-create` to the same name and check `layout_record.py diff`.
 
 Unresolved pictures (pasted images with no known source) are extracted to `assets/unresolved/`
@@ -109,7 +111,6 @@ order). Do not summarise the science.
 
 - Read-only against the PPTX — this skill never writes a `.pptx`.
 - Never modifies `docs/*.md` scientific reports or source figures. It updates only the storyboard
-  it was given and its `.layout.json`, keeps `NAME.md.bak`, and stops when both the deck and the
-  storyboard changed since the last render.
+  it was given and its `.layout.json`, and keeps `NAME.md.bak`.
 - Never fabricates a figure source; unresolved stays unresolved.
 - Rendering belongs to 6-ppt-create — do not duplicate any of it here.

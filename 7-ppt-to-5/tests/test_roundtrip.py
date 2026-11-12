@@ -113,11 +113,47 @@ def test_edit_read_render_keeps_text_and_positions(rendered, tmp_path):
     assert "storyboard text unchanged" in res.stdout
 
 
-def test_guard_stops_when_storyboard_changed_after_render(rendered, tmp_path):
+def _touch(path, t):
+    import os
+    os.utime(path, (t, t))
+
+
+def test_newer_edit_wins_per_slide(rendered, tmp_path):
+    md, out = rendered
+    # storyboard edit on A, deck edit on B: both kept whatever the file times
+    md.write_text(md.read_text().replace("- Two.", "- Two, edited in the storyboard."))
+    prs = Presentation(out)
+    keyed(prs.slides[1])["title"].text_frame.text = "Second slide, retitled in PowerPoint"
+    prs.save(out)
+    _touch(md, 2_000_000_000)
+    _touch(out, 1_000_000_000)
+    res = run_read(out, "--storyboard", md, "--project-root", tmp_path)
+    assert res.returncode == 0, res.stderr
+    text = md.read_text()
+    assert "edited in the storyboard" in text and "retitled in PowerPoint" in text
+
+
+def test_slide_edited_in_both_takes_newer_file(rendered, tmp_path):
+    md, out = rendered
+    story = md.read_text()
+    md.write_text(story.replace("## Second slide", "## Second slide from the storyboard"))
+    prs = Presentation(out)
+    keyed(prs.slides[1])["title"].text_frame.text = "Second slide from PowerPoint"
+    prs.save(out)
+    _touch(md, 1_000_000_000)
+    _touch(out, 2_000_000_000)                     # deck newer -> deck wins
+    res = run_read(out, "--storyboard", md, "--project-root", tmp_path, "--dry-run")
+    assert "the deck is newer" in res.stdout
+    _touch(md, 3_000_000_000)                      # storyboard newer -> storyboard wins
+    res = run_read(out, "--storyboard", md, "--project-root", tmp_path)
+    assert res.returncode == 0, res.stderr
+    assert "## Second slide from the storyboard" in md.read_text()
+    assert "the storyboard is newer" in res.stdout
+
+
+def test_layout_only_keeps_storyboard_text(rendered, tmp_path):
     md, out = rendered
     md.write_text(md.read_text().replace("Two.", "Two, edited in the storyboard."))
-    res = run_read(out, "--storyboard", md, "--project-root", tmp_path)
-    assert res.returncode == 2 and "STOP" in res.stderr
     res = run_read(out, "--storyboard", md, "--project-root", tmp_path, "--layout-only")
     assert res.returncode == 0
     assert "edited in the storyboard" in md.read_text()

@@ -64,7 +64,7 @@ No layout guarantees legible plot labels from aspect ratio alone. Warn about sma
 
 ## Layout file (two-way)
 
-`layout_record.py` is the coordinate layer. Each render does: generic layout → optional `--post-step` → restore `<storyboard>.layout.json` → record the final geometry back to it. The file stores, per `slide_id`, every stamped text box by role (`title`, `takeaway`, `section`, `section-band`, `caption`) and every picture by image SHA-256: position and size as slide fractions, the dominant font size, and the crop. It also stores the storyboard and deck hashes that `/7-ppt-to-5` uses to detect conflicting edits.
+`layout_record.py` is the coordinate layer. Each render does: generic layout → optional `--post-step` → restore `<storyboard>.layout.json` → record the final geometry back to it. The file stores, per `slide_id`, every stamped text box by role (`title`, `takeaway`, `section`, `section-band`, `caption`) and every picture by image SHA-256: position and size as slide fractions, the dominant font size, and the crop. It also stores per-slide storyboard and deck-text hashes, which `/7-ppt-to-5` uses to tell which side changed each slide (newer edit wins).
 
 - Restoring matches by slide ID and shape key, never by position. New slides keep the generic layout. A slide whose figure set changed keeps the generic layout (recorded text boxes would overlap new figures). Render-minted IDs (no `slide-id` in the storyboard) are never restored.
 - When a slide's text changed since the layout was recorded, the boxes are still restored and a warning names any box the text may overflow. Fix by editing the text or the box; do not shrink fonts unasked.

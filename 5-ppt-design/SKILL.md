@@ -17,7 +17,7 @@ This skill is the **create** step: `/5-ppt-design` → `<name>.md` → `/6-ppt-c
 Come back here only to change the story (reorder sections, merge, split, add or cut slides) of a deck that already has a layout file. Then:
 - Edit the existing `<name>.md`; do not write a new file name, or the layout file is not found.
 - Give every slide a `<!-- slide-id: … -->` and never renumber or reuse existing IDs: the layout file matches by ID. A new slide gets a new ID; a merged slide keeps the ID of the slide it absorbs into; a split slide keeps the ID on one part.
-- If the PPTX was edited since the last render, run `/7-ppt-to-5` first so those edits are not lost.
+- If the PPTX was edited since the last render, run `/7-ppt-to-5` first. Where a slide was edited in both places, the newer file wins.
 
 ## Purpose
 

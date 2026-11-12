@@ -22,6 +22,7 @@ import datetime as _dt
 import hashlib
 import json
 import math
+import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -119,6 +120,21 @@ def text_sig(slide):
     return sha256_bytes("\n".join(sorted(parts)).encode())[:16]
 
 
+def notes_sig(slide):
+    try:
+        text = slide.notes_slide.notes_text_frame.text if slide.has_notes_slide else ""
+    except Exception:
+        text = ""
+    return sha256_bytes(" ".join(text.split()).encode())[:16]
+
+
+def block_sha(block):
+    """Hash of one storyboard slide block, ignoring slide markers, separators and spacing."""
+    lines = [l.rstrip() for l in block.splitlines()
+             if l.strip() and l.strip() != "---" and not re.match(r"^\s*<!--\s*Slide\s+\d+\s*-->\s*$", l)]
+    return sha256_bytes("\n".join(lines).encode())[:16]
+
+
 def capture_slide(slide, sw, sh_):
     shapes, figures = [], []
     for z, (key, role, sh) in enumerate(keyed_shapes(slide)):
@@ -140,12 +156,14 @@ def capture_slide(slide, sw, sh_):
             if pt is not None:
                 rec["font_pt"] = pt
         shapes.append(rec)
-    return {"slide_id": slide_id(slide), "text_sig": text_sig(slide),
+    return {"slide_id": slide_id(slide), "text_sig": text_sig(slide), "notes_sig": notes_sig(slide),
             "figures": sorted(figures), "shapes": shapes}
 
 
-def record(pptx, storyboard=None, prior=None):
-    """Layout dict for a deck. `prior` (a previous layout dict) carries `unresolved` forward."""
+def record(pptx, storyboard=None, prior=None, blocks=None):
+    """Layout dict for a deck. `prior` (a previous layout dict) carries `unresolved` forward.
+    `blocks` ({slide_id: storyboard block}) stores a per-slide storyboard hash, so
+    7-ppt-to-5 can tell which slides were edited in the storyboard after this point."""
     from pptx import Presentation
     pptx = Path(pptx)
     prs = Presentation(pptx)
@@ -157,6 +175,8 @@ def record(pptx, storyboard=None, prior=None):
         if entry["slide_id"] is None:
             entry["slide_id"] = f"S{order + 1:03d}"
             entry["positional_id"] = True
+        if blocks and entry["slide_id"] in blocks:
+            entry["md_sha"] = block_sha(blocks[entry["slide_id"]])
         slides.append(entry)
     return {"schema_version": SCHEMA_VERSION,
             "recorded": _dt.datetime.now().isoformat(timespec="seconds"),
