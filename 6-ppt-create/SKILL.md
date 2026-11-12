@@ -67,6 +67,13 @@ From the author's reviews of the CIGAR outline deck (2026-11-11 to 2026-11-12). 
 - **Section band (top left).** Filled rectangle at x = 0, y = 0, about 0.46 in high, width fitted to the label (about 2.8 to 4.2 in), label 20 pt bold with a 0.15 in left inset; no band on the cover. Colour-blind-safe Okabe-Ito fills with the higher-contrast (WCAG) text colour: grey #595959 (first and last section, outline slide), blue #0072B2, orange #E69F00, bluish green #009E73, reddish purple #CC79A7, vermillion #D55E00. The label always names the section, so colour is never the only cue.
 - **Figures and layouts.** Never stretch or crop a figure. Vertical layout (text above, figure below): make multi-panel figures as large as the slide allows (about 11 in wide or more) by keeping on the slide only the bullet that supports the title plus the status line (Selected, Candidate or Placeholder) and moving the other bullets to the notes. Side-by-side layout (text left, figure right): text column and figure column each about half the content width, gap about 0.2 in, the group centred; a single near-square or portrait figure may be smaller than its half; the text box is vertically centred on the same horizontal axis as the figure, and the figure is centred in the content area below the title. The status line stays visible on every figure slide.
 
+- **Constants** (inches unless noted; slide 13.33 x 7.5 in). Keep the project's post-step script in step with this list.
+  - Body: `BODY_PT` 20 pt; `PARA_BEFORE_PT` 8, `PARA_AFTER_PT` 8; line-count estimate with `CHAR_EM` 0.40 (average glyph width in em) and `LINE_FACTOR` 1.2.
+  - Title: `TITLE_PT` 24 pt bold; `TITLE_EM` 0.43; `TITLE_W` 12.7; `TITLE_GAP_BAND` 0.02 (band bottom to title top); `TITLE_BODY_GAP` 0.03 (title bottom to body top); space before and after 0, line spacing 1.0; one title line is about 0.5 in high.
+  - Band: `BAND_H` 0.46; `BAND_PT` 20 bold; `INSET` 0.15; width = `CHAR_W` 0.155 per character plus 0.3, clamped to `BAND_MIN_W` 2.8 and `BAND_MAX_W` 4.2; a "(1 of 2)" suffix is part of the label.
+  - Palette (fill, then text colour by WCAG contrast): section 0 and 6 and the outline slide `595959`; 1 `0072B2`; 2 `E69F00`; 3 `009E73`; 4 `CC79A7`; 5 `D55E00`. Contrast ratios: 7.00, 5.19, 9.32, 6.14, 6.86, 5.43.
+  - Layout: `BOTTOM` 7.38 (lowest edge of any shape); side-by-side `SIDE_MARGIN` 0.25 and `SIDE_GAP` 0.2, giving about 6.3 in for the text column and up to 6.3 in for the figure; multi-panel figures in vertical layouts aim for 11 in or more in total width.
+
 ## Renderer contract
 
 - `postprocess_template.py` is the static renderer. The command fills only its DATA BLOCK; do not generate or patch per-project geometry code below it.
