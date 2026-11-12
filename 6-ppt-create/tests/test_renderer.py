@@ -109,29 +109,54 @@ class RendererTests(unittest.TestCase):
         text='---\n---\n\n<!-- introductory comment -->\n<!-- Slide 1 -->\n<!-- slide-id: A -->\n<!-- variant: short-keep -->\n## Cover\n\n::: notes\n## Not a slide\n:::\n---\n<!-- Slide 2 -->\n<!-- slide-id: B -->\n<!-- layout: large-text-summary -->\n## Summary\n- One\n- Two\n- Three\n'
         path=self.root/'story.md';path.write_text(text);slides=renderer.parse_storyboard(path)
         self.assertEqual([s['id'] for s in slides],['A','B']);self.assertEqual(slides[1]['layout'],'large-text-summary')
-    def test_recorded_geometry_overrides_layout_only_for_unique_matching_figures(self):
+    def test_layout_round_trip_restores_text_and_figure_boxes(self):
+        lr=load('layout_record',SKILL/'layout_record.py')
         path=self.deck('figure-dominant',1);self.m.main()
-        p=Presentation(path); slide=p.slides[0]; pic=next(sh for sh in slide.shapes if sh.shape_type==13)
-        sha=hashlib.sha256(pic.image.blob).hexdigest()
-        notes=slide.notes_slide.notes_text_frame.text
-        deck={'schema_version':1,'slides':[{'slide_id':'TEST-A','figures':[{'figure_id':'F','sha256':sha,'x':.12,'y':.25,'w':.3,'h':.4,'crop':[.1,.05,.02,.03]}]}]}
-        recorded=self.root/'source.deck.json';recorded.write_text(json.dumps(deck))
-        self.assertEqual(renderer.restore_recorded_geometry(path,[{'id':'TEST-A'}],recorded),1)
-        result=Presentation(path); pic=next(sh for sh in result.slides[0].shapes if sh.shape_type==13)
-        self.assertAlmostEqual(pic.left/result.slide_width,.12,places=4)
-        self.assertAlmostEqual(pic.height/result.slide_height,.4,places=4)
+        # Hand edit: move the title and the picture, crop it, change the takeaway size.
+        p=Presentation(path);slide=p.slides[0]
+        keyed={k:sh for k,_,sh in lr.keyed_shapes(slide)}
+        pic=next(sh for k,sh in keyed.items() if k.startswith('figure:'))
+        pic.left,pic.top,pic.width,pic.height=Inches(1),Inches(2.5),Inches(4),Inches(3);pic.crop_left=.1
+        keyed['title'].left=Inches(2)
+        for para in keyed['takeaway'].text_frame.paragraphs:
+            for run in para.runs:run.font.size=Pt(14)
+        p.save(path);edited=lr.record(path)
+        self.assertEqual(edited['slides'][0]['slide_id'],'TEST-A')
+        # Re-render from scratch: generic layout first, then the recorded boxes come back.
+        path=self.deck('figure-dominant',1);self.m.main()
+        self.assertTrue(lr.diff(path,edited))
+        counts=lr.apply(path,edited,log=lambda *_:None)
+        self.assertEqual(counts['slides'],1);self.assertEqual(lr.diff(path,edited),[])
+        result=Presentation(path);keyed={k:sh for k,_,sh in lr.keyed_shapes(result.slides[0])}
+        self.assertAlmostEqual(keyed['title'].left/914400,2,places=3)
+        self.assertEqual(lr.font_pt(keyed['takeaway']),14)
+        pic=next(sh for k,sh in keyed.items() if k.startswith('figure:'))
         self.assertAlmostEqual(pic.crop_left,.1,places=4)
-        self.assertEqual(result.slides[0].notes_slide.notes_text_frame.text,notes)
-        deck['slides'][0]['figures'].append(dict(deck['slides'][0]['figures'][0]))
-        recorded.write_text(json.dumps(deck)); self.assertEqual(renderer.restore_recorded_geometry(path,[{'id':'TEST-A'}],recorded),0)
-        self.assertEqual(renderer.restore_recorded_geometry(path,[{'id':'TEST-A','generated_id':True}],recorded),0)
-    def test_deck_json_discovery(self):
+        self.assertIn('Original speaker notes',result.slides[0].notes_slide.notes_text_frame.text)
+    def test_layout_skips_slide_whose_figures_changed_and_reads_schema_1(self):
+        lr=load('layout_record',SKILL/'layout_record.py')
+        path=self.deck('figure-dominant',1);self.m.main();recorded=lr.record(path)
+        recorded['slides'][0]['figures']=['0'*64]
+        self.assertEqual(lr.apply(path,recorded,log=lambda *_:None)['figures_changed'],1)
+        pic=next(sh for sh in Presentation(path).slides[0].shapes if sh.shape_type==13)
+        sha=hashlib.sha256(pic.image.blob).hexdigest()
+        old={'schema_version':1,'slides':[{'slide_id':'TEST-A','figures':[{'figure_id':'F','sha256':sha,'x':.12,'y':.25,'w':.3,'h':.4,'crop':[.1,.05,.02,.03]}]}]}
+        f=self.root/'old.deck.json';f.write_text(json.dumps(old))
+        self.assertEqual(lr.apply(path,lr.load(f),log=lambda *_:None)['shapes'],1)
+        pic=next(sh for sh in Presentation(path).slides[0].shapes if sh.shape_type==13)
+        self.assertAlmostEqual(pic.left/Presentation(path).slide_width,.12,places=4)
+        old['slides'][0]['figures'][0]['w']=0;f.write_text(json.dumps(old))
+        with self.assertRaises(ValueError):lr.load(f)
+    def test_layout_json_discovery(self):
         source=self.root/'slides.pptx.md';source.write_text('')
-        sibling=self.root/'slides.deck.json';sibling.write_text('{}')
-        self.assertEqual(renderer.find_deck_json(source),sibling.resolve())
-        other=self.root/'slides.pptx.deck.json';other.write_text('{}')
-        with self.assertRaises(ValueError):renderer.find_deck_json(source)
-        self.assertEqual(renderer.find_deck_json(source,sibling),sibling.resolve())
+        self.assertIsNone(renderer.find_layout_json(source))
+        legacy=self.root/'slides.deck.json';legacy.write_text('{}')
+        self.assertEqual(renderer.find_layout_json(source),legacy.resolve())
+        sibling=self.root/'slides.pptx.layout.json';sibling.write_text('{}')
+        self.assertEqual(renderer.find_layout_json(source),sibling.resolve())
+        other=self.root/'slides.layout.json';other.write_text('{}')
+        with self.assertRaises(ValueError):renderer.find_layout_json(source)
+        self.assertEqual(renderer.find_layout_json(source,sibling),sibling.resolve())
     def test_invalid_geometry_rejected(self):
         path=self.deck('figure-right-text-left',1);self.m.LAYOUT_OPTIONS={'TEST-A':{'text_fraction':.9}}
         with self.assertRaises(ValueError):self.m.main()

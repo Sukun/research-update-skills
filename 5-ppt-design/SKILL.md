@@ -8,6 +8,17 @@ description: "Create a topic-and-date-named slide storyboard Markdown file from 
 
 Before producing output, read the user's presentation preferences at `/Users/tg932198@reading.ac.uk/Documents/GLORAN_AMOC_paper/preferences.md`. Apply them across projects; explicit instructions for the current task take priority.
 
+Outlines and storyboards are for sharing with colleagues and reviewers: write all slide text and `::: notes` to the [sharing copy rules](../6-ppt-create/references/sharing-copy.md) (no paths, links or storage details, no status or to-do labels, humanizer-clean language, one-line take-home titles that follow from the previous slide, every number kept, no facts added). Figure paths stay only in `![]()` and annotation comments, which the renderer consumes and never shows. Where this file says to put file paths or TODO notes in `::: notes`, use an HTML comment instead.
+
+## Create vs revise
+
+This skill is the **create** step: `/5-ppt-design` → `<name>.md` → `/6-ppt-create` → `<name>.pptx` + `<name>.layout.json`. Hand edits made in PowerPoint go through the **revise** loop (`/7-ppt-to-5` → `/6-ppt-create`), which updates `<name>.md` and `<name>.layout.json` in place without this skill.
+
+Come back here only to change the story (reorder sections, merge, split, add or cut slides) of a deck that already has a layout file. Then:
+- Edit the existing `<name>.md`; do not write a new file name, or the layout file is not found.
+- Give every slide a `<!-- slide-id: … -->` and never renumber or reuse existing IDs: the layout file matches by ID. A new slide gets a new ID; a merged slide keeps the ID of the slide it absorbs into; a split slide keeps the ID on one part.
+- If the PPTX was edited since the last render, run `/7-ppt-to-5` first so those edits are not lost.
+
 ## Purpose
 
 Produce a slide-by-slide storyboard markdown file from either:

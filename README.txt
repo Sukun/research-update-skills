@@ -30,9 +30,11 @@ Research Workflow Skills  (trigger with /<name>)
 5-ppt-design        → <topic>_<dd-mm-yyyy>.md  (cross-topic story; default source = Summary of topic records)
 01-research-outline → docs/outline.md  (project L1/L2; L3 = topic records or Evidence Index + Gallery)
 5a-ppt-quick-assembly  REMOVED → use 4-mk_quickview share step, Mode B (recoverable from git history)
-6-ppt-create        → <topic>_<dd-mm-yyyy>.pptx  (rendered from storyboard via Pandoc)
-7-ppt-to-5          → deck.json + deck_revised.md  (read a hand-edited PPTX back into a
-                      storyboard; closes the Markdown <-> PowerPoint loop)
+6-ppt-create        → <name>.pptx + <name>.layout.json  (rendered from the storyboard; the layout
+                      file records every box and is restored on the next render)
+7-ppt-to-5          → <name>.md + <name>.layout.json updated in place  (read a hand-edited PPTX
+                      back: text into the storyboard, positions into the layout file)
+                      Create = 5 → 6.  Revise = edit PPTX → 7 → 6 (5 only to change the story).
 
 Pipeline: 1-plan-task → [2-review-plan] → 3-conduct-plan
 Use 2-review-plan when the plan is high-stakes (e.g. paper-submission-level

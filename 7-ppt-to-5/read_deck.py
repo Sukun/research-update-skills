@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""read_deck.py — edited PPTX -> deck.json (pure current state, no diff).
+"""read_deck.py — hand-edited PPTX -> the storyboard it came from + its layout file.
 
-Normal path reads the roles stamped by 6-ppt-create. `--bootstrap` imports a
-legacy unstamped deck once, using the coordinate heuristic and minting fresh ids;
-the deck itself is treated as the truth, with no matching against any storyboard.
+Revise (stamped deck from 6-ppt-create):
+  python read_deck.py EDITED.pptx --storyboard NAME.md [--project-root DIR]
+      text edits are merged into NAME.md (old copy kept as NAME.md.bak);
+      positions, sizes, crops and font sizes go to NAME.layout.json.
+  --layout-only keeps NAME.md as it is; --dry-run only reports.
 
-  python read_deck.py DECK.pptx -o deck.json [--project-root DIR] [--bootstrap]
+Bootstrap (legacy unstamped deck, once):
+  python read_deck.py --bootstrap LEGACY.pptx -o NAME.md [--project-root DIR]
+      the deck is the truth; fresh ids S001, S002, ...; writes NAME.md + NAME.layout.json.
 """
 
 from __future__ import annotations
@@ -16,9 +20,14 @@ import hashlib
 import json
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 from pptx import Presentation
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent / "6-ppt-create"))
 
 SCHEMA_VERSION = 1
 EMU_IN = 914400
@@ -60,6 +69,27 @@ def sha256_bytes(b):
 
 def text_of(shape):
     return shape.text_frame.text.strip() if shape.has_text_frame else ""
+
+
+def para_markdown(paragraph):
+    """Paragraph text with explicitly bold runs written as **bold**."""
+    out, bold = [], []
+
+    def flush():
+        if bold:
+            text = "".join(bold)
+            lead, core, trail = text[:len(text) - len(text.lstrip())], text.strip(), text[len(text.rstrip()):]
+            out.append(f"{lead}**{core}**{trail}")
+            bold.clear()
+
+    for run in paragraph.runs:
+        if run.font.bold and run.text.strip():
+            bold.append(run.text)
+        else:
+            flush()
+            out.append(run.text)
+    flush()
+    return "".join(out).strip() or paragraph.text.strip()
 
 
 def is_chip_like(shape):
@@ -156,9 +186,14 @@ def extract_slide(slide, idx, bootstrap):
     except Exception:
         pass
 
+    paras = []
+    if takeaway is not None:
+        paras = [(p.level, para_markdown(p)) for p in takeaway.text_frame.paragraphs if p.text.strip()]
+    adopted = takeaway is not None and stamped and not read_meta(takeaway).get("role")
     return {"chip": chip, "anchor_sid": anchor_sid, "stamped": stamped,
             "title": title, "section": section,
             "takeaway": text_of(takeaway) if takeaway is not None else None,
+            "takeaway_paras": paras, "adopted_textbox": adopted,
             "notes": notes or None, "figures": figs, "opaque": opaque}
 
 
@@ -236,87 +271,176 @@ def resolve_figure(fig, registry, disk, root, unresolved_map, counter):
     return name, None, "unresolved"
 
 
-# --------------------------------------------------------------------- main
+# --------------------------------------------------------------------- read
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("pptx")
-    ap.add_argument("-o", "--output", required=True)
-    ap.add_argument("--project-root")
-    ap.add_argument("--bootstrap", action="store_true",
-                    help="import a legacy unstamped deck: mint fresh ids, deck is the truth")
-    ap.add_argument("--prior", help="prior deck.json (carries unresolved_manual_NN numbering)")
-    args = ap.parse_args()
-
-    pptx = Path(args.pptx).resolve()
-    root = Path(args.project_root).resolve() if args.project_root else None
+def read(pptx, root=None, bootstrap=False, unresolved_map=None, extract_dir=None):
+    """Current state of the deck as a dict (text + figures). Nothing is written except
+    unresolved pictures, which are extracted to `extract_dir` when given."""
+    pptx = Path(pptx).resolve()
     prs = Presentation(pptx)
     slide_w, slide_h = prs.slide_width, prs.slide_height
-
-    prior = {}
-    if args.prior and Path(args.prior).exists():
-        prior = json.loads(Path(args.prior).read_text())
-    unresolved_map = dict(prior.get("unresolved", {}))
+    unresolved_map = dict(unresolved_map or {})
     counter = [max([int(v.rsplit("_", 1)[1]) for v in unresolved_map.values()
                     if v.startswith("unresolved_manual_")] or [0])]
-
     registry = load_registry(pptx.parent)
     disk = scan_plots(root)
 
     slides, seen_ids, n_unstamped = [], set(), 0
     for idx, slide in enumerate(prs.slides):
-        raw = extract_slide(slide, idx, args.bootstrap)
+        raw = extract_slide(slide, idx, bootstrap)
         if not raw["stamped"]:
             n_unstamped += 1
-
         figs = []
         for fig, sh, crop in raw["figures"]:
             fig["x"] = round((sh.left or 0) / slide_w, 4)
             fig["y"] = round((sh.top or 0) / slide_h, 4)
             fig["w"] = round((sh.width or 0) / slide_w, 4)
             fig["h"] = round((sh.height or 0) / slide_h, 4)
-            fid, src, how = resolve_figure(fig, registry, disk, root,
-                                           unresolved_map, counter)
+            fid, src, how = resolve_figure(fig, registry, disk, root, unresolved_map, counter)
             fig["figure_id"], fig["source"], fig["resolved_by"] = fid, src, how
             if any(crop):
                 fig["crop"] = crop
+            if how == "unresolved" and extract_dir:
+                ext = (sh.image.ext or "png").lower()
+                target = Path(extract_dir) / f"{fid}.{ext}"
+                if not target.exists():
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(sh.image.blob)
+                fig["extracted"] = str(target)
             figs.append(fig)
 
         sid = raw["anchor_sid"]
-        if args.bootstrap or not sid:
+        if bootstrap or not sid:
             sid = f"S{idx + 1:03d}"
-        while sid in seen_ids:            # duplicated slide: id was copied verbatim
-            n = int(re.sub(r"\D", "", sid) or 0)
-            sid = f"S{n:03d}d{sum(1 for s in seen_ids if s.startswith(f'S{n:03d}d')) + 1}"
+        base, k = sid, 0
+        while sid in seen_ids:            # duplicated slide: the stamp was copied verbatim
+            k += 1
+            sid = f"{base}-d{k}"
         seen_ids.add(sid)
 
         entry = {"slide_id": sid, "order": idx, "title": raw["title"],
                  "section": raw["section"], "takeaway": raw["takeaway"],
-                 "notes": raw["notes"], "layout": infer_layout(figs), "figures": figs}
+                 "takeaway_paras": raw["takeaway_paras"],
+                 "notes": raw["notes"], "layout": infer_layout(figs), "figures": figs,
+                 "stamped": raw["stamped"]}
+        if k:
+            entry["duplicate_of"] = base
+        if raw["adopted_textbox"]:
+            entry["adopted_textbox"] = True
         if raw["opaque"]:
             entry["opaque_shapes"] = raw["opaque"]
         slides.append(entry)
 
-    deck = {"schema_version": SCHEMA_VERSION,
-            "deck_id": pptx.stem,
-            "revision": int(prior.get("revision", 0)) + 1,
+    return {"schema_version": SCHEMA_VERSION, "deck_id": pptx.stem,
             "generated": _dt.date.today().isoformat(),
-            "project_root": str(root) if root else None,
-            "source_pptx": pptx.name,
-            "slides": slides,
-            "unresolved": unresolved_map}
+            "project_root": str(root) if root else None, "source_pptx": pptx.name,
+            "slides": slides, "unresolved": unresolved_map, "n_unstamped": n_unstamped}
 
-    Path(args.output).write_text(json.dumps(deck, indent=2, ensure_ascii=False) + "\n")
 
+def report(deck, bootstrap):
+    slides = deck["slides"]
     n_fig = sum(len(s["figures"]) for s in slides)
-    n_unres = sum(1 for s in slides for f in s["figures"] if f["resolved_by"] == "unresolved")
-    print(f"slides: {len(slides)}   figures: {n_fig}   unresolved: {n_unres}")
-    if n_unstamped:
-        mode = "bootstrap" if args.bootstrap else "WARNING: unstamped, ids are positional"
-        print(f"unstamped slides: {n_unstamped}  ({mode})")
-    if n_unres:
-        print(f"{n_unres} figures had no resolvable source — provenance unknown.")
-    print(f"wrote {args.output}")
+    routes = Counter(f["resolved_by"] for s in slides for f in s["figures"])
+    print(f"slides: {len(slides)}   figures: {n_fig}   resolved: "
+          + ", ".join(f"{k} {v}" for k, v in sorted(routes.items())))
+    if deck["n_unstamped"]:
+        mode = "bootstrap" if bootstrap else "WARNING: unstamped, ids are positional"
+        print(f"unstamped slides: {deck['n_unstamped']}  ({mode})")
+    for s in slides:
+        for f in s["figures"]:
+            if f["resolved_by"] == "unresolved":
+                print(f"{s['slide_id']}: {f['figure_id']} has no resolvable source — provenance unknown"
+                      + (f" (extracted to {f['extracted']})" if f.get("extracted") else ""))
+        if s.get("adopted_textbox"):
+            print(f"{s['slide_id']}: a hand-added text box was read as the body; its position is not recorded")
+        for op in s.get("opaque_shapes", []):
+            print(f"{s['slide_id']}: unsupported shape {op['shape_type']} is not round-tripped")
+
+
+# --------------------------------------------------------------------- main
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("pptx")
+    ap.add_argument("--storyboard", help="revise: the storyboard this deck was rendered from (updated in place)")
+    ap.add_argument("-o", "--output", help="bootstrap: the new storyboard .md to write")
+    ap.add_argument("--project-root")
+    ap.add_argument("--bootstrap", action="store_true",
+                    help="import a legacy unstamped deck: mint fresh ids, deck is the truth")
+    ap.add_argument("--layout-only", action="store_true",
+                    help="record positions only; leave the storyboard text untouched")
+    ap.add_argument("--force", action="store_true",
+                    help="merge even though the storyboard changed after the last render")
+    ap.add_argument("--dry-run", action="store_true", help="report what would change; write nothing")
+    ap.add_argument("--json", help="also dump the deck state (text + figures) to this file, for debugging")
+    args = ap.parse_args()
+
+    import layout_record
+    import merge_storyboard
+    pptx = Path(args.pptx).resolve()
+    root = Path(args.project_root).resolve() if args.project_root else None
+
+    if args.bootstrap:
+        if not args.output:
+            ap.error("--bootstrap needs -o NAME.md")
+        md = Path(args.output).resolve()
+        if md.exists():
+            ap.error(f"{md} exists; bootstrap writes a new storyboard only")
+        deck = read(pptx, root, True, None, md.parent / "assets" / "unresolved")
+        report(deck, True)
+        if args.dry_run:
+            return 0
+        md.write_text(merge_storyboard.new_storyboard(deck, md, root))
+        layout = layout_record.record(pptx, md)
+        layout["unresolved"] = deck["unresolved"]
+        layout_record.write(layout, md.with_suffix(".layout.json"))
+        print(f"wrote {md} and {md.with_suffix('.layout.json').name}")
+        return 0
+
+    if not args.storyboard:
+        ap.error("pass --storyboard NAME.md (revise) or --bootstrap -o NAME.md (legacy import)")
+    md = Path(args.storyboard).resolve()
+    layout_path = md.with_suffix(".layout.json")
+    prior = layout_record.load(layout_path) if layout_path.is_file() else None
+    if prior is None:
+        print("NOTE: no layout record yet; cannot tell whether the storyboard changed after the render")
+    else:
+        if prior.get("pptx_sha256") == layout_record.sha256_file(pptx):
+            print("NOTE: the deck is unchanged since its layout was last recorded")
+        story_sha = prior.get("storyboard_sha256")
+        if (story_sha and story_sha != layout_record.sha256_file(md)
+                and not (args.force or args.layout_only)):
+            print("STOP: the storyboard changed after this deck was rendered, so text edited in both\n"
+                  "places would collide. Re-render the storyboard and redo the PowerPoint edits, or pass\n"
+                  "--layout-only (keep the storyboard text, take the positions) or --force (deck text wins).",
+                  file=sys.stderr)
+            return 2
+
+    deck = read(pptx, root, False, (prior or {}).get("unresolved"), md.parent / "assets" / "unresolved")
+    report(deck, False)
+    if args.json and not args.dry_run:
+        Path(args.json).write_text(json.dumps(deck, indent=2, ensure_ascii=False) + "\n")
+
+    if not args.layout_only:
+        text, changes = merge_storyboard.merge(md, deck, root)
+        for line in changes:
+            print(line)
+        if not args.dry_run and text != md.read_text():
+            backup = md.with_name(md.name + ".bak")
+            backup.write_text(md.read_text())
+            md.write_text(text)
+            print(f"updated {md.name} (previous version: {backup.name})")
+        elif text == md.read_text():
+            print("storyboard text unchanged")
+    if args.dry_run:
+        return 0
+    layout = layout_record.record(pptx, md, prior)
+    layout["unresolved"] = deck["unresolved"]
+    # Read slide ids the same way as above, so duplicates and positional slides line up.
+    for entry, s in zip(layout["slides"], deck["slides"]):
+        entry["slide_id"] = s["slide_id"]
+    layout_record.write(layout, layout_path)
+    print(f"wrote {layout_path.name}")
     return 0
 
 

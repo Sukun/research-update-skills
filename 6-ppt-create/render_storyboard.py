@@ -2,8 +2,6 @@
 """Render one approved storyboard with the bundled static postprocessor."""
 import argparse
 import ast
-import hashlib
-import math
 import json
 import re
 import shutil
@@ -22,7 +20,8 @@ LAYOUTS = {'custom', 'text-only', 'single', 'figure-dominant', 'annotated', 'vst
 VARIANTS = {'short-keep', 'short-only', 'full-only', 'backup'}
 
 
-def parse_storyboard(path):
+def parse_storyboard(path, project_root=None):
+    """Figure paths resolve against the storyboard folder, then against project_root."""
     path = Path(path).resolve()
     lines = path.read_text().splitlines(keepends=True)
     headings, separators, markers = [], [], []
@@ -114,6 +113,8 @@ def parse_storyboard(path):
             if re.match(r'\w+://',name):
                 raise ValueError('Use an existing local figure: ' + name)
             source = (path.parent / unquote(name)).resolve()
+            if not source.is_file() and project_root:
+                source = (Path(project_root) / unquote(name)).resolve()
             if not source.is_file():
                 raise FileNotFoundError(source)
             resolved.append(str(source))
@@ -138,7 +139,7 @@ def parse_storyboard(path):
             height = float(terms[0]) / (float(terms[1]) if len(terms)==2 else 1)
             if not 0<height<=1:
                 raise ValueError('figure-height must be in (0,1]')
-        known = {'slide-id','variant','figures','layout','section-tag','figure-height','layout-options','original-title'}
+        known = {'slide-id','variant','figures','layout','section-tag','figure-height','layout-options','original-title','unresolved-figure'}
         for key in re.findall(r'<!--\s*([\w-]+):',metadata_block):
             if key not in known:
                 print('WARNING: annotation has no renderer effect: {} ({})'.format(key,sid or title))
@@ -220,70 +221,31 @@ def derive_variant(source, slides, variant, output, backup='exclude'):
     return [sid for sid in ids if sid in selected]+[sid for sid in ids if sid in backups]
 
 
-def find_deck_json(storyboard, explicit=None):
-    """Only discover an unambiguous sibling; never guess across directories."""
+def find_layout_json(storyboard, explicit=None):
+    """The storyboard's coordinate file: <name>.layout.json beside <name>.md.
+
+    An old 7-ppt-to-5 <name>.deck.json (schema 1, figures only) is still read when no
+    layout file exists. Never guess across directories."""
     if explicit:
         path = Path(explicit).resolve()
         if not path.is_file():
             raise FileNotFoundError(path)
         return path
     storyboard = Path(storyboard).resolve()
-    candidates = [storyboard.with_suffix('.deck.json')]
+    stems = [storyboard.with_suffix('')]
     if storyboard.stem.endswith('.pptx'):
-        candidates.append(storyboard.with_name(storyboard.stem[:-5] + '.deck.json'))
-    existing = list(dict.fromkeys(p for p in candidates if p.is_file()))
-    if len(existing) > 1:
-        raise ValueError('Multiple sibling deck.json files; choose with --deck-json')
-    return existing[0] if existing else None
+        stems.append(storyboard.with_name(storyboard.stem[:-5]))
+    for suffix in ('.layout.json', '.deck.json'):
+        existing = list(dict.fromkeys(p for p in (Path(str(x) + suffix) for x in stems) if p.is_file()))
+        if len(existing) > 1:
+            raise ValueError('Multiple sibling {} files; choose with --layout-json'.format(suffix))
+        if existing:
+            return existing[0]
+    return None
 
 
-def restore_recorded_geometry(pptx, slides, deck_json):
-    """Restore uniquely matched figure geometry after generic postprocessing."""
-    from pptx import Presentation
-    deck = json.loads(Path(deck_json).read_text())
-    if deck.get('schema_version') != 1 or not isinstance(deck.get('slides'), list):
-        raise ValueError('Unsupported or invalid deck.json schema')
-    entries = deck['slides']
-    ids = [x.get('slide_id') for x in entries]
-    if any(not sid for sid in ids) or len(ids) != len(set(ids)):
-        raise ValueError('deck.json has missing or duplicate slide IDs')
-    by_id = dict(zip(ids, entries))
-    prs = Presentation(pptx)
-    if len(prs.slides) != len(slides):
-        raise ValueError('Deck and storyboard slide count differ')
-    count = 0
-    for slide, story in zip(prs.slides, slides):
-        sid = story['id']
-        if story.get('generated_id'):
-            print('WARNING {}: generated slide ID; recorded geometry not applied'.format(sid))
-            continue
-        entry = by_id.get(sid)
-        if entry is None:
-            continue
-        pics = [sh for sh in slide.shapes if sh.shape_type == 13]
-        figures = entry.get('figures', [])
-        for fig in figures:
-            sha = fig.get('sha256')
-            matches = [p for p in pics if hashlib.sha256(p.image.blob).hexdigest() == sha] if sha else []
-            if len(matches) != 1 or sum(f.get('sha256') == sha for f in figures) != 1:
-                print('WARNING {}: figure {} could not be uniquely matched; using generic layout'.format(sid, fig.get('figure_id')))
-                continue
-            values = [fig.get(k) for k in ('x', 'y', 'w', 'h')]
-            if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in values) or values[2] <= 0 or values[3] <= 0:
-                raise ValueError('Invalid recorded geometry for {} {}'.format(sid, fig.get('figure_id')))
-            crop = fig.get('crop', [0, 0, 0, 0])
-            if not isinstance(crop, list) or len(crop) != 4 or not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and 0 <= v < 1 for v in crop) or crop[0]+crop[1] >= 1 or crop[2]+crop[3] >= 1:
-                raise ValueError('Invalid recorded crop for {} {}'.format(sid, fig.get('figure_id')))
-            pic = matches[0]
-            pic.left, pic.top = round(values[0]*prs.slide_width), round(values[1]*prs.slide_height)
-            pic.width, pic.height = round(values[2]*prs.slide_width), round(values[3]*prs.slide_height)
-            pic.crop_left, pic.crop_right, pic.crop_top, pic.crop_bottom = crop
-            count += 1
-        if figures:
-            print('WARNING {}: deck.json does not record text-box geometry; inspect text and figure overlap'.format(sid))
-    prs.save(pptx)
-    print('Restored {} figure geometries from {}'.format(count, deck_json))
-    return count
+def default_layout_path(storyboard):
+    return Path(storyboard).resolve().with_suffix('.layout.json')
 
 
 def render_with_pandoc(storyboard, output, slides, pandoc, reference=None):
@@ -311,19 +273,26 @@ def render_with_pandoc(storyboard, output, slides, pandoc, reference=None):
             raise ValueError('Pandoc title/index mismatch on '+expected['id'])
 
 
-def render(storyboard, output, pandoc=None, reference=None, project_root=None, variants=(), backup='exclude', deck_json=None, engine='pptx'):
+def render(storyboard, output, pandoc=None, reference=None, project_root=None, variants=(), backup='exclude',
+           layout_json=None, engine='pptx', post_step=None, fresh_layout=False, layout_out=None, record_layout=True):
     """Storyboard -> PPTX. engine='pptx' (default) builds the raw deck directly with
     build_pptx.py; engine='pandoc' keeps the legacy Pandoc writer for one transition
     period. Either way the unchanged postprocess_template.py owns the geometry.
-    No reference template is used unless `reference` is passed explicitly."""
+    No reference template is used unless `reference` is passed explicitly.
+
+    Layout layer: after the generic layout (and the optional project `post_step`), the
+    boxes recorded in <storyboard>.layout.json are restored by slide ID and shape key;
+    then the final geometry is recorded back to that file, so the next render (or a
+    7-ppt-to-5 read of a hand-edited deck) starts from it. `fresh_layout` ignores it."""
+    import layout_record
     from pptx import Presentation
     storyboard=Path(storyboard).resolve();output=Path(output).resolve()
     if output==storyboard or output.suffix.lower()!='.pptx':
         raise ValueError('Output must be a separate PPTX file')
     if engine not in ('pptx','pandoc'):
         raise ValueError('engine must be pptx or pandoc')
-    slides=parse_storyboard(storyboard)
-    deck_json=find_deck_json(storyboard, deck_json)
+    slides=parse_storyboard(storyboard, project_root)
+    layout_path=None if fresh_layout else find_layout_json(storyboard, layout_json)
     if variants and any(s.get("generated_id") for s in slides):
         raise ValueError("Variants require explicit stable slide-id comments before rendering")
     output.parent.mkdir(parents=True,exist_ok=True)
@@ -347,10 +316,24 @@ def render(storyboard, output, pandoc=None, reference=None, project_root=None, v
     processor=output.with_suffix('.postprocess.py')
     processor.write_text(fill_template(SKILL/'postprocess_template.py',values))
     subprocess.run([sys.executable,str(processor)],check=True)
-    if deck_json:
-        restore_recorded_geometry(output, slides, deck_json)
     manifest=output.with_suffix('.slides.json')
     manifest.write_text(json.dumps([{k:v for k,v in s.items() if k!='block'} for s in slides],indent=2)+'\n')
+    if post_step:
+        subprocess.run([sys.executable,str(Path(post_step).resolve()),str(output)],check=True)
+    if layout_path:
+        layout_record.apply(output,layout_record.load(layout_path),
+                            skip_ids={s['id'] for s in slides if s.get('generated_id')})
+    if record_layout:
+        target=Path(layout_out).resolve() if layout_out else default_layout_path(storyboard)
+        if fresh_layout and not layout_out and target.is_file():
+            target=output.with_suffix('.layout.json')
+            print('NOTE: --fresh-layout keeps the existing layout file; this render recorded to '+str(target))
+        prior=None
+        if target.is_file():
+            try:prior=layout_record.load(target)
+            except ValueError:prior=None
+        layout_record.write(layout_record.record(output,storyboard,prior),target)
+        print('Layout recorded: '+str(target))
     outputs=[output]
     for variant in variants:
         target=output.with_name(output.stem+'.'+variant+'.pptx')
@@ -365,13 +348,18 @@ def main():
     parser.add_argument('--engine',choices=['pptx','pandoc'],default='pptx',help='pptx: direct python-pptx builder (default); pandoc: deprecated legacy writer')
     parser.add_argument('--pandoc',default=shutil.which('pandoc'),help='only for --engine pandoc')
     parser.add_argument('--reference',type=Path,help='optional template; none is used unless given')
-    parser.add_argument('--deck-json',type=Path,help='Restore recorded figure geometry from this deck.json (otherwise discover a matching sibling)')
+    parser.add_argument('--layout-json',type=Path,help='restore boxes from this layout file (default: <storyboard>.layout.json beside the storyboard)')
+    parser.add_argument('--fresh-layout',action='store_true',help='ignore the recorded layout and use the generic layout rules')
+    parser.add_argument('--layout-out',type=Path,help='where to record the final layout (default: <storyboard>.layout.json)')
+    parser.add_argument('--no-record',action='store_true',help='do not write a layout file')
+    parser.add_argument('--post-step',type=Path,help='project script run as `python SCRIPT deck.pptx` before the layout is restored and recorded')
     parser.add_argument('--project-root',type=Path)
     parser.add_argument('--variants',nargs='+',choices=['short','full'],default=[])
     parser.add_argument('--backup',choices=['exclude','append','hidden'],default='exclude')
     args=parser.parse_args()
     if args.engine=='pandoc' and not args.pandoc:parser.error('Pandoc unavailable; pass --pandoc /path/to/pandoc')
-    outputs,_=render(args.storyboard,args.output or args.storyboard.with_suffix('.pptx'),args.pandoc,args.reference,args.project_root,args.variants,args.backup,args.deck_json,args.engine)
+    outputs,_=render(args.storyboard,args.output or args.storyboard.with_suffix('.pptx'),args.pandoc,args.reference,args.project_root,args.variants,args.backup,
+                     args.layout_json,args.engine,args.post_step,args.fresh_layout,args.layout_out,not args.no_record)
     print('Outputs: '+', '.join(str(p) for p in outputs))
 
 if __name__=='__main__':main()
